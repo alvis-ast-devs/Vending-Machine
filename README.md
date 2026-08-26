@@ -29,6 +29,10 @@ Untuk menjalankan seluruh alur tanpa ESP32/relay, pastikan
 `HARDWARE_ENABLED=false` di `Backend/.env`. Backend akan menyimulasikan respons
 hardware sehingga proses drop dan pengurangan stok tetap dapat diuji.
 
+Pembayaran suara mendengarkan sampai jeda hening, bukan memotong otomatis setelah
+8 detik. Atur `VOICE_PHRASE_TIME_LIMIT_SECONDS=0` untuk tanpa batas maksimum dan
+`VOICE_PAUSE_THRESHOLD_SECONDS=2.0` untuk durasi hening sebelum ucapan diproses.
+
 Flutter juga melewati layar tunggu kamera secara default. Saat hardware sudah
 siap, jalankan Flutter dengan `--dart-define=HARDWARE_ENABLED=true` untuk
 mengaktifkan kembali alur `USER_DETECTED`.
@@ -116,12 +120,37 @@ Untuk pengujian langsung melalui keyboard komputer:
 
 Keyboard, touchscreen, dan event mikrokontroler aktif secara bersamaan.
 
-Pada mode `HARDWARE_ENABLED=false`, layar pembayaran menyediakan tombol
+Jika `HARDWARE_ENABLED=false` dan `VOICE_PAYMENT_ENABLED=false`, layar pembayaran menyediakan tombol
 `SIMULASIKAN PEMBAYARAN BERHASIL`. Tombol tersebut dan tombol keyboard `H`
 mengirim daftar slot keranjang ke backend. Backend menyimulasikan drop, mengurangi
 stok, dan mencatat log pembelian. Pada mode hardware aktif, endpoint
 `POST /api/events/payment-success` dari sistem pembayaran menjalankan alur yang
 sama menggunakan ESP32.
+
+## Pembayaran suara
+
+Layar pembayaran sekarang otomatis memulai gateway nominal suara. Flutter
+mengirimkan keranjang dan total tagihan ke backend. Backend menghitung ulang
+total dari katalog untuk mencegah nominal tagihan diubah dari aplikasi, lalu
+mendengarkan mikrofon hingga pengguna mengucapkan nominal, misalnya `lima belas
+ribu rupiah`.
+
+Nominal beberapa ucapan dijumlahkan. Jika belum cukup, layar menampilkan jumlah
+yang sudah diterima dan sisa dalam rupiah. Jika sudah sama atau lebih besar dari
+total, backend mengeluarkan produk dan layar berpindah ke halaman selesai.
+
+Aktifkan mikrofon pembayaran pada `Backend/.env`:
+
+```text
+VOICE_PAYMENT_ENABLED=true
+VOICE_PAYMENT_LANGUAGE=id-ID
+VOICE_PHRASE_TIME_LIMIT_SECONDS=0
+VOICE_PAUSE_THRESHOLD_SECONDS=2.0
+```
+
+Backend membutuhkan perangkat mikrofon aktif, koneksi internet, serta paket
+Python pada `Backend/requirements.txt`. Jalankan ulang backend setelah memasang
+dependensi atau mengubah konfigurasi.
 
 Firmware menerima perintah tes `DETECT`, angka `0` sampai `9`, `ACCEPT`,
 `CANCEL`, dan `DECLINED`. Untuk menguji rangkaian lengkap saat backend memegang

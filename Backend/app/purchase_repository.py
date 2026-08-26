@@ -68,6 +68,27 @@ def prepare_purchase(
     return products
 
 
+def calculate_purchase_total(db: Session, slot_codes: list[str]) -> int:
+    """Calculate the server-authoritative checkout amount before listening."""
+    quantities = Counter(slot_codes)
+    products = {
+        product.slot_code: product
+        for product in db.scalars(
+            select(Product).where(Product.slot_code.in_(quantities))
+        ).all()
+    }
+
+    total = 0
+    for slot_code, quantity in quantities.items():
+        product = products.get(slot_code)
+        if product is None or not product.is_active:
+            raise PurchaseProductUnavailableError(slot_code)
+        if product.stock < quantity:
+            raise PurchaseStockInsufficientError(slot_code)
+        total += product.price * quantity
+    return total
+
+
 def create_purchase_log(
     db: Session,
     payload: PaymentSuccessRequest,

@@ -11,6 +11,10 @@ class PaymentScreen extends StatefulWidget {
   final int totalPrice;
   final MachineSocketStatus socketStatus;
   final bool isProcessing;
+  final bool isListening;
+  final int paidAmount;
+  final int remainingAmount;
+  final String? voiceMessage;
   final String? errorMessage;
   final bool showMockPaymentAction;
   final Future<void> Function() onMockPaymentSuccess;
@@ -23,6 +27,10 @@ class PaymentScreen extends StatefulWidget {
     required this.totalPrice,
     required this.socketStatus,
     required this.isProcessing,
+    required this.isListening,
+    required this.paidAmount,
+    required this.remainingAmount,
+    required this.voiceMessage,
     required this.errorMessage,
     required this.showMockPaymentAction,
     required this.onMockPaymentSuccess,
@@ -77,17 +85,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   String get _connectionText {
     if (widget.isProcessing) return 'Memproses dan mengeluarkan pesanan...';
+    if (widget.isListening) {
+      return 'Menunggu Pembayaran';
+    }
     switch (widget.socketStatus) {
       case MachineSocketStatus.connecting:
         return 'Menghubungkan kanal pembayaran...';
       case MachineSocketStatus.connected:
-        return 'Menunggu konfirmasi PAYMENT_SUCCESS';
+        return 'Menunggu Pembayaran';
       case MachineSocketStatus.disconnected:
         return 'Koneksi terputus • mencoba kembali';
     }
   }
 
   Color get _connectionColor {
+    if (widget.isListening) return VendingColors.accent;
     switch (widget.socketStatus) {
       case MachineSocketStatus.connecting:
         return VendingColors.warning;
@@ -138,7 +150,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Scan QRIS untuk membayar',
+                      'QRIS',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
@@ -153,17 +165,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(24),
                       ),
-                      child: const FittedBox(
-                        fit: BoxFit.contain,
-                        child: Icon(
-                          Icons.qr_code_2_rounded,
-                          color: Colors.black,
-                        ),
+                      child: const Icon(
+                        Icons.mic_rounded,
+                        color: Colors.black,
+                        size: 176,
                       ),
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'QRIS DUMMY',
+                      'Scan QRIS untuk melakukan pembayaran',
                       style: TextStyle(
                         color: VendingColors.muted,
                         fontSize: 14,
@@ -210,6 +220,32 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                    if (widget.isListening || widget.voiceMessage != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        widget.voiceMessage ??
+                            'Mikrofon sedang mendengarkan...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: VendingColors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Bayar: ${formatRupiah(widget.paidAmount)}'
+                        ' • Sisa: ${formatRupiah(widget.remainingAmount)}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: widget.remainingAmount > 0
+                              ? VendingColors.warning
+                              : VendingColors.accent,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

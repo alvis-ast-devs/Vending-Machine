@@ -13,6 +13,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.models import PurchaseLog, PurchaseLogItem
 from app.serial_bridge import parse_serial_event, serial_bridge
+from app.voice_payment import VoicePaymentSession, parse_currency_from_speech
 
 test_engine = create_engine(
     "sqlite+pysqlite://",
@@ -84,6 +85,66 @@ def test_product_crud_restock_and_soft_delete(client: TestClient):
     assert deactivated.json()["is_active"] is False
     assert client.get("/api/products").json() == []
     assert len(client.get("/api/products?include_inactive=true").json()) == 1
+
+
+@pytest.mark.parametrize(
+    ("spoken", "expected"),
+    [
+        ("lima belas ribu rupiah", 15_000),
+        ("dua puluh lima ribu lima ratus", 25_500),
+        ("15000", 15_000),
+        ("200200", 2_200),
+        ("tidak ada nominal", 0),
+    ],
+)
+def test_parse_currency_from_indonesian_speech(spoken: str, expected: int):
+    assert parse_currency_from_speech(spoken) == expected
+
+
+def test_voice_payment_start_uses_server_price(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    assert client.post("/api/products", json=product_payload()).status_code == 201
+
+    async def fake_start(**kwargs):
+        return VoicePaymentSession(
+            transaction_id=kwargs["transaction_id"],
+            slot_codes=kwargs["slot_codes"],
+            total_amount=kwargs["total_amount"],
+        )
+
+    monkeypatch.setattr("app.main.voice_payment_manager.start", fake_start)
+    response = client.post(
+        "/api/payments/voice/start",
+        json={
+            "transaction_id": "TRX-VOICE-001",
+            "slot_codes": ["11"],
+            "total_amount": 12_000,
+        },
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "transaction_id": "TRX-VOICE-001",
+        "total_amount": 12_000,
+        "paid_amount": 0,
+        "remaining_amount": 12_000,
+        "status": "listening",
+    }
+
+    invalid_total = client.post(
+        "/api/payments/voice/start",
+        json={
+            "transaction_id": "TRX-VOICE-002",
+            "slot_codes": ["11"],
+            "total_amount": 1,
+        },
+    )
+    assert invalid_total.status_code == 422
+    assert invalid_total.json()["detail"] == (
+        "Total pembayaran tidak sesuai dengan harga produk di backend."
+    )
 
 
 def test_duplicate_slot_returns_conflict(client: TestClient):

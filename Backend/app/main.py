@@ -33,7 +33,7 @@ from app import (
     theme_repository,
 )
 from app.config import settings
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.schemas import (
     DropSlotResponse,
     EventResponse,
@@ -47,8 +47,16 @@ from app.schemas import (
     PurchaseLogResponse,
     ThemeSettingsResponse,
     ThemeSettingsUpdate,
+    VoicePaymentSessionResponse,
+    VoicePaymentStartRequest,
 )
 from app.serial_bridge import SerialBridgeError, serial_bridge
+from app.voice_payment import (
+    GoogleSpeechCurrencyListener,
+    SpeechPaymentError,
+    VoicePaymentManager,
+    VoicePaymentSession,
+)
 from app.websocket_manager import websocket_manager
 
 DbSession = Annotated[Session, Depends(get_db)]
@@ -57,6 +65,13 @@ logger = logging.getLogger("uvicorn.error")
 MEDIA_UPLOAD_DIR = FilePath(settings.media_upload_dir).resolve()
 MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 payment_processing_lock = asyncio.Lock()
+voice_payment_manager = VoicePaymentManager(
+    GoogleSpeechCurrencyListener(
+        language=settings.voice_payment_language,
+        phrase_time_limit_seconds=settings.voice_phrase_time_limit_seconds,
+        pause_threshold_seconds=settings.voice_pause_threshold_seconds,
+    )
+)
 
 IMAGE_TYPES = {
     "image/jpeg": {".jpg", ".jpeg"},
@@ -70,7 +85,7 @@ VIDEO_TYPES = {
     "video/mp4": {".mp4"},
     "video/webm": {".webm"},
     "video/quicktime": {".mov"},
-    "video/x-matroska": {".mkv"},
+    "video/x-matroska": {".mkv"}
 }
 
 
@@ -501,8 +516,10 @@ async def send_keypad_event(
     return EventResponse(type=event_type, delivered_to=delivered)
 
 
-@app.post("/api/events/payment-success", response_model=EventResponse)
-async def send_payment_success(payload: PaymentSuccessRequest, db: DbSession):
+async def process_payment_success(
+    payload: PaymentSuccessRequest,
+    db: Session,
+) -> EventResponse:
     transaction_id = payload.transaction_id or f"TRX-{uuid4().hex[:12].upper()}"
     confirmed_payload = payload.model_copy(
         update={"transaction_id": transaction_id},
@@ -567,6 +584,138 @@ async def send_payment_success(payload: PaymentSuccessRequest, db: DbSession):
         }
     )
     return EventResponse(type=event_type, delivered_to=delivered)
+
+
+@app.post("/api/events/payment-success", response_model=EventResponse)
+async def send_payment_success(payload: PaymentSuccessRequest, db: DbSession):
+    """Compatibility endpoint for an external payment provider or manual tests."""
+    return await process_payment_success(payload, db)
+
+
+def voice_payment_session_response(
+    session: VoicePaymentSession,
+) -> VoicePaymentSessionResponse:
+    return VoicePaymentSessionResponse(
+        transaction_id=session.transaction_id,
+        total_amount=session.total_amount,
+        paid_amount=session.paid_amount,
+        remaining_amount=session.remaining_amount,
+        status=session.status,
+    )
+
+
+async def broadcast_voice_payment_event(
+    event_type: str,
+    session: VoicePaymentSession,
+    message: str,
+    transcript: str | None,
+) -> None:
+    data = voice_payment_session_response(session).model_dump()
+    data["message"] = message
+    if transcript is not None:
+        data["transcript"] = transcript
+    await websocket_manager.broadcast({"type": event_type, "data": data})
+
+
+async def complete_voice_payment(session: VoicePaymentSession) -> bool:
+    """Confirm a sufficient spoken amount using the usual stock/drop flow."""
+    db = SessionLocal()
+    try:
+        await process_payment_success(
+            PaymentSuccessRequest(
+                transaction_id=session.transaction_id,
+                slot_codes=session.slot_codes,
+            ),
+            db,
+        )
+        return True
+    except HTTPException as error:
+        db.rollback()
+        await broadcast_voice_payment_event(
+            "VOICE_PAYMENT_ERROR",
+            session,
+            str(error.detail),
+            None,
+        )
+        return False
+    except Exception:
+        db.rollback()
+        logger.exception("Gagal menyelesaikan pembayaran suara")
+        await broadcast_voice_payment_event(
+            "VOICE_PAYMENT_ERROR",
+            session,
+            "Backend tidak dapat memproses pesanan.",
+            None,
+        )
+        return False
+    finally:
+        db.close()
+
+
+@app.post(
+    "/api/payments/voice/start",
+    response_model=VoicePaymentSessionResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_voice_payment(payload: VoicePaymentStartRequest, db: DbSession):
+    """Start one microphone session; progress is delivered over WebSocket."""
+    if not settings.voice_payment_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="VOICE_PAYMENT_ENABLED belum diaktifkan di backend.",
+        )
+
+    transaction_id = payload.transaction_id or f"TRX-{uuid4().hex[:12].upper()}"
+    try:
+        expected_total = purchase_repository.calculate_purchase_total(
+            db,
+            payload.slot_codes,
+        )
+    except purchase_repository.PurchaseProductUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produk slot {error.slot_code} tidak tersedia",
+        ) from error
+    except purchase_repository.PurchaseStockInsufficientError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Stok slot {error.slot_code} tidak mencukupi",
+        ) from error
+
+    if payload.total_amount != expected_total:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Total pembayaran tidak sesuai dengan harga produk di backend.",
+        )
+
+    try:
+        session = await voice_payment_manager.start(
+            transaction_id=transaction_id,
+            slot_codes=payload.slot_codes,
+            total_amount=expected_total,
+            on_event=broadcast_voice_payment_event,
+            on_confirmed=complete_voice_payment,
+        )
+    except SpeechPaymentError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+
+    return voice_payment_session_response(session)
+
+
+@app.post("/api/payments/voice/{transaction_id}/cancel", response_model=MessageResponse)
+async def cancel_voice_payment(transaction_id: str):
+    cancelled = await voice_payment_manager.cancel(transaction_id)
+    return MessageResponse(
+        message=(
+            "Pembayaran suara dibatalkan."
+            if cancelled
+            else "Sesi pembayaran suara tidak ditemukan."
+        ),
+        data={"transaction_id": transaction_id, "cancelled": cancelled},
+    )
 
 
 @app.post(

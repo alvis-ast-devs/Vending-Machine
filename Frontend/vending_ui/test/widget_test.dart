@@ -80,7 +80,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('PEMBAYARAN'), findsOneWidget);
     expect(find.text('01:00'), findsOneWidget);
-    expect(find.text('Menunggu konfirmasi PAYMENT_SUCCESS'), findsOneWidget);
+    expect(
+      find.text('Mikrofon aktif • ucapkan nominal pembayaran'),
+      findsOneWidget,
+    );
 
     eventSource.emit(
       const MachineEvent(
@@ -311,14 +314,16 @@ void main() {
     expect(find.text('Selamat Datang'), findsOneWidget);
   });
 
-  testWidgets('mode tanpa hardware menyediakan pembayaran simulasi', (
+  testWidgets('pembayaran memulai gateway nominal suara', (
     tester,
   ) async {
-    final paymentRequests = <Map<String, dynamic>>[];
+    final voicePaymentRequests = <Map<String, dynamic>>[];
     final eventSource = FakeMachineEventSource();
     await tester.pumpWidget(
       VendingApp(
-        apiService: buildMockApiService(paymentRequests: paymentRequests),
+        apiService: buildMockApiService(
+          voicePaymentRequests: voicePaymentRequests,
+        ),
         eventSource: eventSource,
         hardwareEnabled: false,
       ),
@@ -332,13 +337,13 @@ void main() {
     eventSource.emit(const MachineEvent(type: 'KEYPAD_ACCEPT', data: {}));
     await tester.pump(const Duration(milliseconds: 400));
 
-    final simulatePayment = find.text('SIMULASIKAN PEMBAYARAN BERHASIL');
-    expect(simulatePayment, findsOneWidget);
-    await tester.tap(simulatePayment);
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(find.text('Terima Kasih!'), findsOneWidget);
-    expect(paymentRequests.single['slot_codes'], ['01']);
+    expect(
+      find.text('Mikrofon aktif • ucapkan nominal pembayaran'),
+      findsOneWidget,
+    );
+    expect(voicePaymentRequests, hasLength(1));
+    expect(voicePaymentRequests.single['slot_codes'], ['01']);
+    expect(voicePaymentRequests.single['total_amount'], 8000);
   });
 
   testWidgets('tanpa iklan layar tetap di Home setelah idle', (tester) async {
@@ -580,6 +585,7 @@ void main() {
 ApiService buildMockApiService({
   Map<String, dynamic>? mediaCatalog,
   List<Map<String, dynamic>>? paymentRequests,
+  List<Map<String, dynamic>>? voicePaymentRequests,
   Map<String, dynamic>? theme,
 }) {
   final products = physicalSlotRows
@@ -626,6 +632,31 @@ ApiService buildMockApiService({
         paymentRequests?.add(payload);
         return http.Response(
           jsonEncode({'type': 'PAYMENT_SUCCESS', 'delivered_to': 0}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      if (request.url.path == '/api/payments/voice/start') {
+        final payload = Map<String, dynamic>.from(
+          jsonDecode(request.body) as Map,
+        );
+        voicePaymentRequests?.add(payload);
+        return http.Response(
+          jsonEncode({
+            'transaction_id': payload['transaction_id'],
+            'total_amount': payload['total_amount'],
+            'paid_amount': 0,
+            'remaining_amount': payload['total_amount'],
+            'status': 'listening',
+          }),
+          202,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      if (request.url.path.startsWith('/api/payments/voice/') &&
+          request.url.path.endsWith('/cancel')) {
+        return http.Response(
+          jsonEncode({'message': 'Pembayaran suara dibatalkan.'}),
           200,
           headers: {'content-type': 'application/json; charset=utf-8'},
         );

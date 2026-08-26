@@ -16,6 +16,15 @@ def env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def env_optional_int(name: str, default: int | None = None) -> int | None:
+    """Read an integer setting; blank/zero means no limit."""
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    parsed = int(value)
+    return None if parsed <= 0 else parsed
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Smart Vending Machine API")
@@ -34,6 +43,15 @@ class Settings:
     serial_baudrate: int = int(os.getenv("SERIAL_BAUDRATE", "115200"))
     serial_timeout_seconds: float = float(os.getenv("SERIAL_TIMEOUT_SECONDS", "5"))
     hardware_enabled: bool = env_bool("HARDWARE_ENABLED", default=False)
+    voice_payment_enabled: bool = env_bool("VOICE_PAYMENT_ENABLED", default=True)
+    voice_payment_language: str = os.getenv("VOICE_PAYMENT_LANGUAGE", "id-ID")
+    # None means SpeechRecognition listens until the user stops speaking.
+    voice_phrase_time_limit_seconds: int | None = env_optional_int(
+        "VOICE_PHRASE_TIME_LIMIT_SECONDS", default=None
+    )
+    voice_pause_threshold_seconds: float = float(
+        os.getenv("VOICE_PAUSE_THRESHOLD_SECONDS", "2.0")
+    )
     full_stock: int = int(os.getenv("FULL_STOCK", "10"))
     media_upload_dir: str = os.getenv(
         "MEDIA_UPLOAD_DIR",

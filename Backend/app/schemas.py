@@ -99,6 +99,18 @@ class PaymentSuccessRequest(BaseModel):
     slot_codes: list[SlotCode] = Field(min_length=1)
 
 
+class VoicePaymentStartRequest(PaymentSuccessRequest):
+    total_amount: int = Field(gt=0)
+
+
+class VoicePaymentSessionResponse(BaseModel):
+    transaction_id: str
+    total_amount: int
+    paid_amount: int
+    remaining_amount: int
+    status: str
+
+
 class PurchaseLogItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

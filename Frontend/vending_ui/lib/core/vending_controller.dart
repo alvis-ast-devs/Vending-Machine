@@ -76,6 +76,10 @@ class _VendingControllerState extends State<VendingController> {
   List<String> _checkoutSlotCodes = const [];
   String? _checkoutTransactionId;
   bool _processingPayment = false;
+  bool _voicePaymentListening = false;
+  int _voicePaidAmount = 0;
+  int _voiceRemainingAmount = 0;
+  String? _voicePaymentMessage;
   String? _paymentError;
 
   @override
@@ -128,12 +132,44 @@ class _VendingControllerState extends State<VendingController> {
       return;
     }
 
+    if (_isCurrentVoicePaymentEvent(event)) {
+      _handleVoicePaymentEvent(event);
+      return;
+    }
+
     if (event.type == 'PAYMENT_SUCCESS' &&
         _currentRoute == VendingRoute.payment) {
       _processingPayment = false;
       _paymentError = null;
       _goTo(VendingRoute.finish);
     }
+  }
+
+  bool _isCurrentVoicePaymentEvent(MachineEvent event) {
+    if (!event.type.startsWith('VOICE_PAYMENT_') ||
+        _currentRoute != VendingRoute.payment) {
+      return false;
+    }
+    return event.data['transaction_id'] == _checkoutTransactionId;
+  }
+
+  void _handleVoicePaymentEvent(MachineEvent event) {
+    final paidAmount = event.data['paid_amount'];
+    final remainingAmount = event.data['remaining_amount'];
+    setState(() {
+      if (paidAmount is int) _voicePaidAmount = paidAmount;
+      if (remainingAmount is int) _voiceRemainingAmount = remainingAmount;
+      _voicePaymentListening =
+          event.type == 'VOICE_PAYMENT_LISTENING' ||
+          event.type == 'VOICE_PAYMENT_UPDATE' ||
+          event.type == 'VOICE_PAYMENT_UNRECOGNIZED';
+      _processingPayment = event.type == 'VOICE_PAYMENT_CONFIRMED';
+      final message = event.data['message'];
+      _voicePaymentMessage = message is String ? message : null;
+      _paymentError = event.type == 'VOICE_PAYMENT_ERROR'
+          ? _voicePaymentMessage
+          : null;
+    });
   }
 
   KeyEventResult _handleKeyboardEvent(FocusNode _, KeyEvent event) {
@@ -316,9 +352,48 @@ class _VendingControllerState extends State<VendingController> {
       _itemCount = itemCount;
       _totalPrice = totalPrice;
       _processingPayment = false;
+      _voicePaymentListening = false;
+      _voicePaidAmount = 0;
+      _voiceRemainingAmount = totalPrice;
+      _voicePaymentMessage = null;
       _paymentError = null;
       _currentRoute = VendingRoute.payment;
     });
+    if (AppConfig.voicePaymentEnabled) {
+      unawaited(_startVoicePayment());
+    }
+  }
+
+  Future<void> _startVoicePayment() async {
+    if (!mounted ||
+        _currentRoute != VendingRoute.payment ||
+        _checkoutTransactionId == null ||
+        _checkoutSlotCodes.isEmpty) {
+      return;
+    }
+    try {
+      final session = await _apiService.startVoicePayment(
+        transactionId: _checkoutTransactionId!,
+        slotCodes: _checkoutSlotCodes,
+        totalAmount: _totalPrice,
+      );
+      if (mounted && _currentRoute == VendingRoute.payment) {
+        setState(() {
+          _voicePaymentListening = session.status == 'listening';
+          _voicePaidAmount = session.paidAmount;
+          _voiceRemainingAmount = session.remainingAmount;
+          _voicePaymentMessage = '';
+          _paymentError = null;
+        });
+      }
+    } on ApiException catch (error) {
+      if (mounted && _currentRoute == VendingRoute.payment) {
+        setState(() {
+          _voicePaymentListening = false;
+          _paymentError = error.message;
+        });
+      }
+    }
   }
 
   Future<void> _submitMockPaymentSuccess() async {
@@ -354,12 +429,20 @@ class _VendingControllerState extends State<VendingController> {
   }
 
   void _returnHome() {
+    final transactionId = _checkoutTransactionId;
+    if (transactionId != null) {
+      unawaited(_apiService.cancelVoicePayment(transactionId));
+    }
     setState(() {
       _itemCount = 0;
       _totalPrice = 0;
       _checkoutSlotCodes = const [];
       _checkoutTransactionId = null;
       _processingPayment = false;
+      _voicePaymentListening = false;
+      _voicePaidAmount = 0;
+      _voiceRemainingAmount = 0;
+      _voicePaymentMessage = null;
       _paymentError = null;
       _currentRoute = VendingRoute.home;
     });
@@ -430,8 +513,13 @@ class _VendingControllerState extends State<VendingController> {
           totalPrice: _totalPrice,
           socketStatus: _socketStatus,
           isProcessing: _processingPayment,
+          isListening: _voicePaymentListening,
+          paidAmount: _voicePaidAmount,
+          remainingAmount: _voiceRemainingAmount,
+          voiceMessage: _voicePaymentMessage,
           errorMessage: _paymentError,
-          showMockPaymentAction: !widget.hardwareEnabled,
+          showMockPaymentAction:
+              !AppConfig.voicePaymentEnabled && !widget.hardwareEnabled,
           onMockPaymentSuccess: _submitMockPaymentSuccess,
           onExpired: _returnHome,
           onCancel: _returnHome,

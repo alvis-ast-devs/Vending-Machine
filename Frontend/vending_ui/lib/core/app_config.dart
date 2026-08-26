@@ -11,6 +11,10 @@ class AppConfig {
     'HARDWARE_ENABLED',
     defaultValue: false,
   );
+  static const bool voicePaymentEnabled = bool.fromEnvironment(
+    'VOICE_PAYMENT_ENABLED',
+    defaultValue: true,
+  );
 
   static const double portraitAspectRatio = 9 / 16;
   static const Size initialWindowSize = Size(540, 960);
@@ -42,5 +46,9 @@ class AppConfig {
   static Uri get themeUri => Uri.parse('$backendHttpUrl/api/theme');
   static Uri get paymentSuccessUri =>
       Uri.parse('$backendHttpUrl/api/events/payment-success');
+  static Uri get voicePaymentStartUri =>
+      Uri.parse('$backendHttpUrl/api/payments/voice/start');
+  static Uri voicePaymentCancelUri(String transactionId) =>
+      Uri.parse('$backendHttpUrl/api/payments/voice/$transactionId/cancel');
   static Uri get machineWebSocketUri => Uri.parse(backendWebSocketUrl);
 }

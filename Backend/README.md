@@ -27,6 +27,11 @@ Jika PostgreSQL tidak dapat diakses, endpoint database mengembalikan HTTP `503`
 dengan pesan ringkas. Periksa `DATABASE_URL` dan status PostgreSQL untuk melihat
 akar masalahnya.
 
+Pembayaran suara menggunakan `VOICE_PHRASE_TIME_LIMIT_SECONDS=0` (tanpa batas
+durasi) dan menunggu hening selama `VOICE_PAUSE_THRESHOLD_SECONDS=2.0` sebelum
+mengirim satu ucapan ke Google Speech-to-Text. Naikkan nilai kedua jika ucapan
+masih sering terpotong oleh jeda pendek.
+
 ## Mode tanpa ESP32
 
 Secara default backend menggunakan simulasi hardware. Pengaturannya berada di
@@ -86,6 +91,33 @@ produk disimpan sebagai snapshot agar riwayat tidak berubah ketika katalog
 diedit. Sistem mempertahankan maksimal 30 transaksi terbaru dan otomatis
 menghapus transaksi tertua. Pengiriman ulang `transaction_id` yang sama tidak
 menjalankan drop atau membuat log duplikat.
+
+## Pembayaran dengan nominal suara
+
+Saat Flutter membuka halaman pembayaran, aplikasi mengirim `transaction_id`,
+`slot_codes`, dan `total_amount` ke `POST /api/payments/voice/start`. Backend
+memverifikasi total tersebut dengan harga produk pada database (bukan nilai dari
+Flutter), lalu membuka mikrofon dan terus mendengarkan sampai ada ucapan.
+
+Setiap nominal yang berhasil dikenali akan ditambahkan ke pembayaran berjalan.
+Jika nominal masih kurang, backend menyiarkan event `VOICE_PAYMENT_UPDATE` yang
+berisi `paid_amount` dan `remaining_amount`. Jika jumlahnya sudah cukup atau
+lebih, backend menjalankan alur drop yang sama dengan `payment-success`, lalu
+menyiarkan `PAYMENT_SUCCESS`.
+
+Tambahkan konfigurasi berikut ke `.env` backend bila diperlukan:
+
+```text
+VOICE_PAYMENT_ENABLED=true
+VOICE_PAYMENT_LANGUAGE=id-ID
+VOICE_PHRASE_TIME_LIMIT_SECONDS=0
+VOICE_PAUSE_THRESHOLD_SECONDS=2.0
+```
+
+Fitur ini menggunakan `SpeechRecognition`, `PyAudio`, dan Google Speech
+Recognition. Mesin backend harus memiliki mikrofon default yang dapat dibuka
+dan koneksi internet untuk pengenalan suara. Instal dependensi terbaru dengan
+`pip install -r requirements.txt` lalu restart Uvicorn.
 
 Event yang diterima Flutter berbentuk:
 

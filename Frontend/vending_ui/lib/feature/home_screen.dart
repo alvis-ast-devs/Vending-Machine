@@ -196,7 +196,7 @@ class _CustomHomeScreenState extends State<_CustomHomeScreen> {
                       SizedBox(width: 10),
                       Flexible(
                         child: Text(
-                          'SENTUH LAYAR UNTUK MULAI',
+                          'TEKAN PAGAR UNTUK MULAI',
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: VendingColors.white,

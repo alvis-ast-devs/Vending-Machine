@@ -15,6 +15,32 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+class VoicePaymentSession {
+  final String transactionId;
+  final int totalAmount;
+  final int paidAmount;
+  final int remainingAmount;
+  final String status;
+
+  const VoicePaymentSession({
+    required this.transactionId,
+    required this.totalAmount,
+    required this.paidAmount,
+    required this.remainingAmount,
+    required this.status,
+  });
+
+  factory VoicePaymentSession.fromJson(Map<String, dynamic> json) {
+    return VoicePaymentSession(
+      transactionId: json['transaction_id'] as String,
+      totalAmount: json['total_amount'] as int,
+      paidAmount: json['paid_amount'] as int,
+      remainingAmount: json['remaining_amount'] as int,
+      status: json['status'] as String,
+    );
+  }
+}
+
 class ApiService {
   final http.Client _client;
   final bool _ownsClient;
@@ -154,6 +180,66 @@ class ApiService {
     } catch (_) {
       throw const ApiException('Backend tidak dapat memproses transaksi');
     }
+  }
+
+  Future<VoicePaymentSession> startVoicePayment({
+    required String transactionId,
+    required List<String> slotCodes,
+    required int totalAmount,
+  }) async {
+    try {
+      final response = await _client
+          .post(
+            AppConfig.voicePaymentStartUri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'transaction_id': transactionId,
+              'slot_codes': slotCodes,
+              'total_amount': totalAmount,
+            }),
+          )
+          .timeout(AppConfig.requestTimeout);
+      if (response.statusCode != 202) {
+        throw ApiException(
+          _readError(response, 'Backend gagal memulai mikrofon'),
+        );
+      }
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map) {
+        throw const ApiException('Respons pembayaran suara tidak valid');
+      }
+      return VoicePaymentSession.fromJson(Map<String, dynamic>.from(decoded));
+    } on ApiException {
+      rethrow;
+    } on FormatException {
+      throw const ApiException('Respons pembayaran suara tidak valid');
+    } catch (_) {
+      throw const ApiException(
+        'Backend pembayaran suara tidak dapat dihubungi',
+      );
+    }
+  }
+
+  Future<void> cancelVoicePayment(String transactionId) async {
+    try {
+      await _client
+          .post(AppConfig.voicePaymentCancelUri(transactionId))
+          .timeout(AppConfig.requestTimeout);
+    } catch (_) {
+      // Pembatalan bersifat best-effort; UI tetap dapat kembali ke halaman awal.
+    }
+  }
+
+  String _readError(http.Response response, String fallback) {
+    try {
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is Map && decoded['detail'] is String) {
+        return decoded['detail'] as String;
+      }
+    } on FormatException {
+      // Gunakan pesan cadangan bila respons backend bukan JSON.
+    }
+    return '$fallback (${response.statusCode})';
   }
 
   void close() {
