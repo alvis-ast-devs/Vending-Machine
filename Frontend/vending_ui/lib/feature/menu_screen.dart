@@ -1,12 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:vending_ui/core/api_service.dart';
 import 'package:vending_ui/core/app_theme.dart';
 import 'package:vending_ui/core/app_utils.dart';
+import 'package:vending_ui/core/event_bus.dart';
 import 'package:vending_ui/core/portrait_page.dart';
 import 'package:vending_ui/core/product_model.dart';
-import 'package:vending_ui/core/websocket_service.dart';
 
 typedef CheckoutCallback =
     void Function(List<String> slotCodes, int itemCount, int totalPrice);
@@ -495,12 +496,28 @@ class _ProductVisual extends StatelessWidget {
         color: !isAvailable
             ? VendingColors.muted
             : isLargeRow
-            ? VendingColors.warning
-            : VendingColors.white,
+                ? VendingColors.warning
+                : VendingColors.white,
       ),
     );
     final source = imageUrl;
     if (source == null || source.isEmpty) return fallback;
+
+    // Check if this is a local file path.
+    final file = File(source);
+    if (file.existsSync()) {
+      return Opacity(
+        opacity: isAvailable ? 1 : 0.42,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Image.file(
+            file,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => fallback,
+          ),
+        ),
+      );
+    }
 
     return Opacity(
       opacity: isAvailable ? 1 : 0.42,
@@ -574,7 +591,7 @@ class _CatalogLoading extends StatelessWidget {
             child: CircularProgressIndicator(color: VendingColors.accent),
           ),
           SizedBox(height: 18),
-          Text('Mengambil produk dari backend...'),
+          Text('Memuat produk...'),
         ],
       ),
     );
@@ -596,7 +613,7 @@ class _CatalogError extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.cloud_off_rounded,
+              Icons.error_outline_rounded,
               size: 70,
               color: VendingColors.danger,
             ),

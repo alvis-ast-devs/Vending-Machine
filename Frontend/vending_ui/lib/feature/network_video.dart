@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
@@ -7,12 +8,14 @@ import 'package:vending_ui/core/app_theme.dart';
 
 class NetworkVideo extends StatefulWidget {
   final String url;
+  final String? localPath;
   final VoidCallback onFinished;
   final bool loop;
 
   const NetworkVideo({
     super.key,
     required this.url,
+    this.localPath,
     required this.onFinished,
     this.loop = false,
   });
@@ -42,12 +45,28 @@ class _NetworkVideoState extends State<NetworkVideo> {
     unawaited(_open());
   }
 
+  @override
+  void didUpdateWidget(covariant NetworkVideo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url || oldWidget.localPath != widget.localPath) {
+      _finished = false;
+      unawaited(_open());
+    }
+  }
+
   Future<void> _open() async {
     try {
       if (widget.loop) {
         await _player.setPlaylistMode(PlaylistMode.loop);
       }
-      await _player.open(Media(widget.url), play: true);
+
+      // Prefer local path if available.
+      final localPath = widget.localPath;
+      if (localPath != null && File(localPath).existsSync()) {
+        await _player.open(Media.file(File(localPath)), play: true);
+      } else {
+        await _player.open(Media(widget.url), play: true);
+      }
     } catch (_) {
       _finish();
     }

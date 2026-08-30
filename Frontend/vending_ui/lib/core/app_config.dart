@@ -16,19 +16,18 @@ class AppConfig {
     defaultValue: true,
   );
 
+  /// Serial port name for ESP32 communication (e.g. COM3 on Windows).
+  static const String serialPort = String.fromEnvironment(
+    'SERIAL_PORT',
+    defaultValue: 'COM3',
+  );
+
+  static const int serialBaudRate = 115200;
+
   static const double portraitAspectRatio = 9 / 16;
   static const Size initialWindowSize = Size(540, 960);
   static const Size minimumWindowSize = Size(360, 640);
   static const Size designSize = Size(540, 960);
-
-  static const String backendHttpUrl = String.fromEnvironment(
-    'BACKEND_HTTP_URL',
-    defaultValue: 'http://127.0.0.1:8000',
-  );
-  static const String backendWebSocketUrl = String.fromEnvironment(
-    'BACKEND_WEBSOCKET_URL',
-    defaultValue: 'ws://127.0.0.1:8000/ws/machine',
-  );
 
   static const Duration pageTransitionDuration = Duration(milliseconds: 350);
   static const Duration homeIdleDuration = Duration(seconds: 30);
@@ -38,17 +37,7 @@ class AppConfig {
   static const Duration finishDuration = Duration(seconds: 5);
   static const Duration requestTimeout = Duration(seconds: 8);
   static const Duration paymentProcessingTimeout = Duration(minutes: 2);
-  static const Duration socketReconnectDelay = Duration(seconds: 3);
-  static const Duration socketPingInterval = Duration(seconds: 20);
 
-  static Uri get productsUri => Uri.parse('$backendHttpUrl/api/products');
-  static Uri get mediaUri => Uri.parse('$backendHttpUrl/api/media');
-  static Uri get themeUri => Uri.parse('$backendHttpUrl/api/theme');
-  static Uri get paymentSuccessUri =>
-      Uri.parse('$backendHttpUrl/api/events/payment-success');
-  static Uri get voicePaymentStartUri =>
-      Uri.parse('$backendHttpUrl/api/payments/voice/start');
-  static Uri voicePaymentCancelUri(String transactionId) =>
-      Uri.parse('$backendHttpUrl/api/payments/voice/$transactionId/cancel');
-  static Uri get machineWebSocketUri => Uri.parse(backendWebSocketUrl);
+  /// Default full stock value for restock operations.
+  static const int defaultFullStock = 10;
 }

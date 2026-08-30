@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:vending_ui/core/api_service.dart';
 import 'package:vending_ui/core/app_config.dart';
 import 'package:vending_ui/core/app_theme.dart';
+import 'package:vending_ui/core/event_bus.dart';
 import 'package:vending_ui/core/media_asset.dart';
-import 'package:vending_ui/core/websocket_service.dart';
 import 'package:vending_ui/feature/ad_screen.dart';
 import 'package:vending_ui/feature/finish_screen.dart';
 import 'package:vending_ui/feature/home_screen.dart';
@@ -86,7 +86,7 @@ class _VendingControllerState extends State<VendingController> {
   void initState() {
     super.initState();
     _apiService = widget.apiService ?? ApiService();
-    _eventSource = widget.eventSource ?? WebSocketService();
+    _eventSource = widget.eventSource ?? eventBus;
     _eventSource.start(
       onEvent: _handleMachineEvent,
       onStatusChanged: _handleSocketStatus,

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:vending_ui/core/app_theme.dart';
 import 'package:vending_ui/core/media_asset.dart';
@@ -8,14 +10,12 @@ class TutorialScreen extends StatelessWidget {
   final MediaAsset tutorial;
   final VoidCallback onFinished;
 
-  const TutorialScreen({
-    super.key,
-    required this.tutorial,
-    required this.onFinished,
-  });
+  const TutorialScreen({super.key, required this.tutorial, required this.onFinished});
 
   @override
   Widget build(BuildContext context) {
+    final localPath = tutorial.localPath;
+
     return PortraitPage(
       backgroundColor: Colors.black,
       child: Stack(
@@ -24,6 +24,7 @@ class TutorialScreen extends StatelessWidget {
           NetworkVideo(
             key: ValueKey('tutorial-${tutorial.id}'),
             url: tutorial.url,
+            localPath: localPath,
             onFinished: onFinished,
           ),
           Positioned(

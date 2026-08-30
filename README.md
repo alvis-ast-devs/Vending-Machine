@@ -1,168 +1,121 @@
 # Smart Vending Machine
 
-Sistem terdiri dari Flutter Desktop UI, FastAPI + PostgreSQL, React Admin, dan
-firmware ESP32.
+Aplikasi Flutter Desktop mandiri untuk mesin vending machine pintar.
+Semua data disimpan secara lokal (JSON file), tanpa backend server.
 
-## 1. Jalankan database
+## Arsitektur
 
-```powershell
-docker compose up -d postgres
+```
+Flutter Desktop (satu aplikasi)
+├── Tampilan vending machine
+├── Data produk lokal (products.json)
+├── Stok lokal
+├── Media lokal (folder assets/)
+├── Komunikasi ESP32 (flutter_libserialport)
+└── Voice recognition via Python (Process.run)
 ```
 
-## 2. Jalankan backend
+## Struktur Folder
 
-```powershell
-cd Backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-python seed_products.py
-uvicorn app.main:app --reload --port 8000
+Saat build/run, aplikasi menggunakan struktur folder di sebelah executable:
+
+```
+build/.../Release/
+├── vending_machine.exe
+├── products.json                    ← edit manual untuk produk
+├── assets/
+│   ├── product_images/
+│   │   ├── 01.png                   ← foto produk slot 01
+│   │   ├── 02.jpg                   ← foto produk slot 02
+│   │   └── ...
+│   ├── ads/
+│   │   ├── iklan_01.mp4             ← iklan (bisa banyak)
+│   │   ├── iklan_02.png
+│   │   └── ...
+│   ├── tutorial/
+│   │   └── tutorial.mp4             ← satu video tutorial
+│   └── homescreen/
+│       └── homescreen.png           ← satu foto/video homescreen
 ```
 
-Perintah `seed_products.py` juga membuat tabel log pembelian pada database yang
-sudah ada. Dashboard menyimpan dan menampilkan maksimal 30 transaksi terbaru;
-transaksi tertua dihapus otomatis setelah batas tersebut terlampaui.
+### Format `products.json`
 
-Untuk menjalankan seluruh alur tanpa ESP32/relay, pastikan
-`HARDWARE_ENABLED=false` di `Backend/.env`. Backend akan menyimulasikan respons
-hardware sehingga proses drop dan pengurangan stok tetap dapat diuji.
-
-Pembayaran suara mendengarkan sampai jeda hening, bukan memotong otomatis setelah
-8 detik. Atur `VOICE_PHRASE_TIME_LIMIT_SECONDS=0` untuk tanpa batas maksimum dan
-`VOICE_PAUSE_THRESHOLD_SECONDS=2.0` untuk durasi hening sebelum ucapan diproses.
-
-Flutter juga melewati layar tunggu kamera secara default. Saat hardware sudah
-siap, jalankan Flutter dengan `--dart-define=HARDWARE_ENABLED=true` untuk
-mengaktifkan kembali alur `USER_DETECTED`.
-
-## 3. Jalankan admin dashboard
-
-```powershell
-cd Frontend\admin_dashboard
-Copy-Item .env.example .env
-npm install
-npm run dev
+```json
+[
+  {
+    "slot_code": "01",
+    "name": "Snack 01",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  }
+]
 ```
 
-## 4. Jalankan Flutter Desktop
+## Menjalankan
 
-```powershell
-cd Frontend\vending_ui
+### 1. Install Dependencies
+
+```bash
+cd Frontend/vending_ui
+flutter pub get
+```
+
+### 2. Install Python Dependencies (untuk voice recognition)
+
+```bash
+pip install SpeechRecognition PyAudio
+```
+
+### 3. Jalankan
+
+```bash
+# Tanpa hardware (mode simulasi)
 flutter run -d windows
+
+# Dengan hardware ESP32
+flutter run -d windows --dart-define=HARDWARE_ENABLED=true --dart-define=SERIAL_PORT=COM3
 ```
 
-## 5. Upload firmware ESP32
+### 4. Build
 
-Buka `Hardware/smart_vending_esp32.ino` melalui Arduino IDE, pilih board ESP32,
-sesuaikan `MOTOR_RELAY_PIN`, lalu upload. Port USB yang sama harus ditulis pada
-`SERIAL_PORT` di `Backend/.env`.
-
-## Alur komunikasi
-
-```text
-React Admin ──REST──> FastAPI <──REST── Flutter
-                              └──WebSocket──> Flutter
-FastAPI ──DROP_SLOT_xx──> ESP32 ──SUCCESS_xx──> FastAPI
-Flutter <──WebSocket── FastAPI <──EVENT_*── ESP32/keypad
+```bash
+flutter build windows --release
 ```
 
-## Alur media layar
+## Keyboard Shortcuts
 
-- Aplikasi mulai dari Home. Setelah 30 detik tidak digunakan, aplikasi memutar
-  foto/video iklan yang diunggah dari dashboard admin.
-- Saat event `USER_DETECTED` diterima, satu video tutorial diputar lalu aplikasi
-  langsung membuka Menu. Jika tutorial belum tersedia, aplikasi tetap berada di
-  Home dan pengguna dapat masuk melalui tombol atau sentuhan layar.
-- Home dapat memakai satu foto atau video 9:16 dari dashboard admin. Video
-  diputar berulang dan seluruh layar dapat disentuh untuk mulai berbelanja.
-- Jika media Home dihapus atau belum diunggah, aplikasi memakai layar Home
-  bawaan. Iklan/tutorial yang kosong juga dilewati tanpa layar media kosong.
-- Menu yang tidak menerima interaksi selama 30 detik dianggap ditinggalkan dan
-  kembali ke Home. Setelah Home idle selama 30 detik, iklan mulai diputar.
-
-## Palet warna layar
-
-Tombol **Pengaturan warna** berada di header dashboard admin, di atas navbar.
-Halaman tersebut menyediakan preview menu 9:16, input color picker/HEX, reset ke
-palet bawaan, pembatalan perubahan, dan tombol simpan. Palet disimpan pada
-backend dan dikirim ke Flutter melalui event WebSocket `THEME_UPDATED`, sehingga
-layar mesin mengambil warna terbaru tanpa perlu restart manual.
-
-Warna yang dapat diatur adalah latar utama, teks utama, teks sekunder, aksen,
-sorotan, dan bahaya. Warna permukaan internal dan pemisah diturunkan otomatis
-dari latar utama agar desain Flutter tetap sederhana tanpa kartu produk.
-
-## Kontrol keypad dan tes ESP32
-
-Kontrol sentuh Flutter tetap aktif. Keypad menjadi jalur input tambahan dengan
-alur berikut:
-
-- tombol apa pun saat tutorial memutar video akan melewati tutorial dan langsung
-  membuka Menu;
-- masukkan dua digit kode slot, lalu `ACCEPT` untuk menambahkan produk;
-- tekan `ACCEPT` tanpa kode untuk membuka pembayaran jika keranjang berisi;
-- masukkan kode slot, lalu `CANCEL`/`DECLINED` untuk mengurangi produk tersebut;
-- tekan `CANCEL` tanpa kode untuk membatalkan transaksi;
-- `CANCEL` pada layar pembayaran kembali ke Home.
-
-Untuk pengujian langsung melalui keyboard komputer:
-
-| Tombol keyboard | Trigger aplikasi |
-| --- | --- |
-| `F` | Pengguna terdeteksi/dekati mesin |
-| `0`–`9` atau numpad | Masukkan kode slot |
+| Tombol | Fungsi |
+|--------|--------|
+| `F` | Pengguna terdeteksi |
+| `0`–`9` | Masukkan kode slot |
 | `Enter` | Accept |
 | `Shift` kiri/kanan | Cancel |
 | `G` | Declined |
-| `H` | Payment success |
+| `H` | Payment success (simulasi) |
 
-Keyboard, touchscreen, dan event mikrokontroler aktif secara bersamaan.
+## Media
 
-Jika `HARDWARE_ENABLED=false` dan `VOICE_PAYMENT_ENABLED=false`, layar pembayaran menyediakan tombol
-`SIMULASIKAN PEMBAYARAN BERHASIL`. Tombol tersebut dan tombol keyboard `H`
-mengirim daftar slot keranjang ke backend. Backend menyimulasikan drop, mengurangi
-stok, dan mencatat log pembelian. Pada mode hardware aktif, endpoint
-`POST /api/events/payment-success` dari sistem pembayaran menjalankan alur yang
-sama menggunakan ESP32.
+- **Foto produk:** Letakkan file gambar di `assets/product_images/` dengan nama `{slot_code}.{ext}` (misal `01.png`, `15.jpg`)
+- **Iklan:** Letakkan file di `assets/ads/` (foto atau video, diputar bergantian)
+- **Tutorial:** Letakkan satu file video di `assets/tutorial/` (ganti = rename file baru)
+- **Homescreen:** Letakkan satu file di `assets/homescreen/` (foto atau video)
 
-## Pembayaran suara
+Format yang didukung:
+- Gambar: PNG, JPG, WebP, GIF, BMP
+- Video: MP4, WebM, MOV, MKV
 
-Layar pembayaran sekarang otomatis memulai gateway nominal suara. Flutter
-mengirimkan keranjang dan total tagihan ke backend. Backend menghitung ulang
-total dari katalog untuk mencegah nominal tagihan diubah dari aplikasi, lalu
-mendengarkan mikrofon hingga pengguna mengucapkan nominal, misalnya `lima belas
-ribu rupiah`.
+## ESP32
 
-Nominal beberapa ucapan dijumlahkan. Jika belum cukup, layar menampilkan jumlah
-yang sudah diterima dan sisa dalam rupiah. Jika sudah sama atau lebih besar dari
-total, backend mengeluarkan produk dan layar berpindah ke halaman selesai.
+Firmware ESP32 ada di `Hardware/smart_vending_esp32/`. Upload via Arduino IDE.
+Port USB harus sesuai dengan `SERIAL_PORT` saat menjalankan aplikasi.
 
-Aktifkan mikrofon pembayaran pada `Backend/.env`:
+## Hardware Test Commands
 
-```text
-VOICE_PAYMENT_ENABLED=true
-VOICE_PAYMENT_LANGUAGE=id-ID
-VOICE_PHRASE_TIME_LIMIT_SECONDS=0
-VOICE_PAUSE_THRESHOLD_SECONDS=2.0
-```
+Jika hardware aktif, ESP32 menerima perintah:
+- `DROP_SLOT_XX` → drop produk
+- `TEST_DETECT` → simulasi user detected
+- `TEST_ACCEPT` / `TEST_CANCEL` / `TEST_DECLINED` → keypad events
+- `TEST_KEY_X` → digit keypad
 
-Backend membutuhkan perangkat mikrofon aktif, koneksi internet, serta paket
-Python pada `Backend/requirements.txt`. Jalankan ulang backend setelah memasang
-dependensi atau mengubah konfigurasi.
-
-Firmware menerima perintah tes `DETECT`, angka `0` sampai `9`, `ACCEPT`,
-`CANCEL`, dan `DECLINED`. Untuk menguji rangkaian lengkap saat backend memegang
-port serial, kirim perintah melalui endpoint berikut di halaman `/docs`:
-
-```text
-POST /api/hardware/test-input/DETECT
-POST /api/hardware/test-input/KEY_0
-POST /api/hardware/test-input/KEY_1
-POST /api/hardware/test-input/ACCEPT
-POST /api/hardware/test-input/DECLINED
-```
-
-Untuk menguji Flutter tanpa ESP32, gunakan `POST /api/events/user-detected` dan
-`POST /api/events/keypad/{key}`.
+## @ Copyright Aruvisu

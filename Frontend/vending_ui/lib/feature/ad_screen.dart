@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:vending_ui/core/app_config.dart';
@@ -41,7 +42,7 @@ class _AdScreenState extends State<AdScreen> {
 
   void _scheduleCurrentMedia() {
     _imageTimer?.cancel();
-    if (widget.ads.isEmpty || _currentAd.type != MediaAssetType.image) return;
+    if (widget.ads.isEmpty || _currentAd.isVideo) return;
     _imageTimer = Timer(AppConfig.adImageDuration, _showNext);
   }
 
@@ -67,6 +68,12 @@ class _AdScreenState extends State<AdScreen> {
     }
 
     final currentAd = _currentAd;
+    final localPath = currentAd.localPath;
+    final isLocalImage =
+        localPath != null && currentAd.isImage && File(localPath).existsSync();
+    final isLocalVideo =
+        localPath != null && currentAd.isVideo && File(localPath).existsSync();
+
     return PortraitPage(
       backgroundColor: Colors.black,
       child: Stack(
@@ -74,18 +81,35 @@ class _AdScreenState extends State<AdScreen> {
         children: [
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 350),
-            child: currentAd.type == MediaAssetType.image
-                ? Image.network(
-                    currentAd.url,
+            child: isLocalImage
+                ? Image.file(
+                    File(localPath!),
                     key: ValueKey('ad-image-${currentAd.id}'),
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) => const _MediaError(),
                   )
-                : NetworkVideo(
-                    key: ValueKey('ad-video-${currentAd.id}-$_playbackCycle'),
-                    url: currentAd.url,
-                    onFinished: _showNext,
-                  ),
+                : isLocalVideo
+                    ? NetworkVideo(
+                        key: ValueKey(
+                            'ad-video-${currentAd.id}-$_playbackCycle'),
+                        url: currentAd.url,
+                        localPath: localPath,
+                        onFinished: _showNext,
+                      )
+                    : currentAd.isImage
+                        ? Image.network(
+                            currentAd.url,
+                            key: ValueKey('ad-image-${currentAd.id}'),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const _MediaError(),
+                          )
+                        : NetworkVideo(
+                            key: ValueKey(
+                                'ad-video-${currentAd.id}-$_playbackCycle'),
+                            url: currentAd.url,
+                            localPath: localPath,
+                            onFinished: _showNext,
+                          ),
           ),
           Positioned(
             left: 28,

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:vending_ui/core/app_theme.dart';
 import 'package:vending_ui/core/media_asset.dart';
@@ -144,6 +146,12 @@ class _CustomHomeScreenState extends State<_CustomHomeScreen> {
       return _DefaultHomeScreen(onContinue: widget.onContinue);
     }
 
+    final localPath = widget.media.localPath;
+    final isLocalImage =
+        localPath != null && widget.media.isImage && File(localPath).existsSync();
+    final isLocalVideo =
+        localPath != null && widget.media.isVideo && File(localPath).existsSync();
+
     return PortraitPage(
       backgroundColor: Colors.black,
       child: Semantics(
@@ -156,7 +164,24 @@ class _CustomHomeScreenState extends State<_CustomHomeScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (widget.media.type == MediaAssetType.image)
+              if (isLocalImage)
+                Image.file(
+                  File(localPath!),
+                  key: ValueKey('homescreen-image-${widget.media.id}'),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const _HomeMediaError(),
+                )
+              else if (isLocalVideo)
+                NetworkVideo(
+                  key: ValueKey('homescreen-video-${widget.media.id}'),
+                  url: widget.media.url,
+                  localPath: localPath,
+                  loop: true,
+                  onFinished: () {
+                    if (mounted) setState(() => _videoFailed = true);
+                  },
+                )
+              else if (widget.media.isImage)
                 Image.network(
                   widget.media.url,
                   key: ValueKey('homescreen-image-${widget.media.id}'),
@@ -167,6 +192,7 @@ class _CustomHomeScreenState extends State<_CustomHomeScreen> {
                 NetworkVideo(
                   key: ValueKey('homescreen-video-${widget.media.id}'),
                   url: widget.media.url,
+                  localPath: localPath,
                   loop: true,
                   onFinished: () {
                     if (mounted) setState(() => _videoFailed = true);

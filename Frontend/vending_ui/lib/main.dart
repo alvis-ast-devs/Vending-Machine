@@ -1,18 +1,25 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:vending_ui/core/api_service.dart';
 import 'package:vending_ui/core/app_config.dart';
 import 'package:vending_ui/core/app_theme.dart';
+import 'package:vending_ui/core/event_bus.dart';
+import 'package:vending_ui/core/local_data_service.dart';
+import 'package:vending_ui/core/serial_bridge.dart';
 import 'package:vending_ui/core/vending_controller.dart';
-import 'package:vending_ui/core/websocket_service.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   await windowManager.ensureInitialized();
+
+  // Initialize local data service.
+  final dataService = LocalDataService.instance;
+  await dataService.init();
 
   final windowOptions = WindowOptions(
     size: AppConfig.initialWindowSize,
@@ -30,24 +37,25 @@ Future<void> main() async {
     await windowManager.focus();
   });
 
-  runApp(const VendingApp());
+  // Set up serial bridge for ESP32 communication.
+  final serialBridge = SerialBridge(
+    portName: AppConfig.hardwareEnabled ? AppConfig.serialPort : '',
+    baudRate: AppConfig.serialBaudRate,
+    hardwareEnabled: AppConfig.hardwareEnabled,
+  );
+
+  // Wire the serial bridge to publish events to the local event bus.
+  if (AppConfig.hardwareEnabled) {
+    serialBridge.startListening();
+  }
+
+  runApp(VendingApp(serialBridge: serialBridge));
 }
 
 class VendingApp extends StatefulWidget {
-  final ApiService? apiService;
-  final MachineEventSource? eventSource;
-  final bool hardwareEnabled;
-  final Duration homeIdleDuration;
-  final Duration menuIdleDuration;
+  final SerialBridge serialBridge;
 
-  const VendingApp({
-    super.key,
-    this.apiService,
-    this.eventSource,
-    this.hardwareEnabled = AppConfig.hardwareEnabled,
-    this.homeIdleDuration = AppConfig.homeIdleDuration,
-    this.menuIdleDuration = AppConfig.menuIdleDuration,
-  });
+  const VendingApp({super.key, required this.serialBridge});
 
   @override
   State<VendingApp> createState() => _VendingAppState();
@@ -59,18 +67,16 @@ class _VendingAppState extends State<VendingApp> {
   @override
   void initState() {
     super.initState();
-    _apiService = widget.apiService ?? ApiService();
+    _apiService = ApiService();
+    _apiService.setSerialBridge(widget.serialBridge);
     unawaited(_loadTheme());
   }
 
   Future<void> _loadTheme() async {
-    try {
-      final palette = await _apiService.fetchTheme();
-      if (!mounted) return;
-      setState(() => VendingColors.apply(palette));
-    } on ApiException {
-      // Palet bawaan tetap dipakai saat backend belum dapat dihubungi.
-    }
+    // In local mode, the default palette is always used.
+    // Theme updates from admin would trigger a setState here.
+    if (!mounted) return;
+    setState(() => VendingColors.apply(VendingPalette.defaults));
   }
 
   @override
@@ -81,10 +87,8 @@ class _VendingAppState extends State<VendingApp> {
       theme: VendingTheme.data,
       home: VendingController(
         apiService: _apiService,
-        eventSource: widget.eventSource,
-        hardwareEnabled: widget.hardwareEnabled,
-        homeIdleDuration: widget.homeIdleDuration,
-        menuIdleDuration: widget.menuIdleDuration,
+        eventSource: eventBus,
+        hardwareEnabled: AppConfig.hardwareEnabled,
         onThemeUpdated: _loadTheme,
       ),
     );
