@@ -63,7 +63,7 @@ class _NetworkVideoState extends State<NetworkVideo> {
       // Prefer local path if available.
       final localPath = widget.localPath;
       if (localPath != null && File(localPath).existsSync()) {
-        await _player.open(Media.file(File(localPath)), play: true);
+        await _player.open(Media('file://$localPath'), play: true);
       } else {
         await _player.open(Media(widget.url), play: true);
       }

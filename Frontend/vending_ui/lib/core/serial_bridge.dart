@@ -126,10 +126,9 @@ class SerialBridge {
     try {
       final available = port.bytesAvailable;
       if (available <= 0) return null;
-      final buffer = Uint8List(available);
-      final read = port.read(buffer, timeout: 100);
-      if (read <= 0) return null;
-      return String.fromCharCodes(buffer.sublist(0, read));
+      final data = port.read(available, timeout: 100);
+      if (data.isEmpty) return null;
+      return String.fromCharCodes(data);
     } catch (_) {
       return null;
     }
@@ -186,6 +185,10 @@ class SerialBridge {
   }
 }
 
-class SerialBridgeError extends RuntimeError {
-  SerialBridgeError(super.message);
+class SerialBridgeError implements Exception {
+  final String message;
+  SerialBridgeError(this.message);
+
+  @override
+  String toString() => 'SerialBridgeError: $message';
 }

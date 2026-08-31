@@ -57,7 +57,7 @@ class VoiceRecognitionBridge {
       _process = await Process.start(
         pythonPath,
         [resolvedScript],
-        mode: ProcessMode.normal,
+        mode: ProcessStartMode.normal,
       );
 
       _listening = true;

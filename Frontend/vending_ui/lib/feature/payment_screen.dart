@@ -1,3 +1,5 @@
+import 'package:vending_ui/core/local_data_service.dart';
+import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -157,20 +159,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Container(
-                      width: 310,
-                      height: 310,
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Icon(
-                        Icons.mic_rounded,
-                        color: Colors.black,
-                        size: 176,
-                      ),
-                    ),
+                    _buildQrCodeImage(),
                     const SizedBox(height: 12),
                     Text(
                       'Scan QRIS untuk melakukan pembayaran',
@@ -330,6 +319,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Build QR code image from assets folder, with fallback icon if not found.
+  Widget _buildQrCodeImage() {
+    final qrFile = File(
+      '${LocalDataService.instance.assetsPath}${Platform.pathSeparator}qris.png',
+    );
+    return Container(
+      width: 310,
+      height: 310,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: qrFile.existsSync()
+          ? Image.file(qrFile, fit: BoxFit.contain)
+          : const Icon(
+              Icons.qr_code_rounded,
+              color: Colors.black,
+              size: 176,
+            ),
     );
   }
 }

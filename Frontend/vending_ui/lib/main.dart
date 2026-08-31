@@ -7,6 +7,7 @@ import 'package:vending_ui/core/api_service.dart';
 import 'package:vending_ui/core/app_config.dart';
 import 'package:vending_ui/core/app_theme.dart';
 import 'package:vending_ui/core/event_bus.dart';
+import 'package:vending_ui/core/theme_settings.dart';
 import 'package:vending_ui/core/local_data_service.dart';
 import 'package:vending_ui/core/serial_bridge.dart';
 import 'package:vending_ui/core/vending_controller.dart';

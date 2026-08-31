@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
 import 'package:vending_ui/core/product_model.dart';
 
 /// Manages all local data: products JSON file and media folder scanning.
@@ -26,7 +25,8 @@ class LocalDataService {
     if (customBasePath != null) {
       _appDir = Directory(customBasePath);
     } else {
-      _appDir = await getApplicationSupportDirectory();
+      // Use the directory next to the executable for portable deployment.
+    _appDir = File(Platform.resolvedExecutable).parent;
     }
 
     _assetsDir = Directory('${_appDir.path}${Platform.pathSeparator}assets');
@@ -200,12 +200,20 @@ class LocalDataService {
   List<MediaFile> scanAds() {
     final adsDir = Directory('${_assetsDir.path}${Platform.pathSeparator}ads');
     if (!adsDir.existsSync()) return [];
-    return adsDir
+    final files = adsDir
         .listSync()
         .whereType<File>()
         .where((f) => _isSupportedMedia(f.path))
         .toList()
       ..sort((a, b) => a.path.compareTo(b.path));
+    return files
+        .map((f) => MediaFile(
+              file: f,
+              name: f.uri.pathSegments.last,
+              isVideo: _isSupportedVideo(f.path),
+              isImage: _isSupportedImage(f.path),
+            ))
+        .toList();
   }
 
   /// Find the tutorial video in the tutorial folder.
