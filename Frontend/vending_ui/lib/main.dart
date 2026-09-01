@@ -43,6 +43,9 @@ Future<void> main() async {
     portName: AppConfig.hardwareEnabled ? AppConfig.serialPort : '',
     baudRate: AppConfig.serialBaudRate,
     hardwareEnabled: AppConfig.hardwareEnabled,
+    connectionMode: AppConfig.connectionMode,
+    tcpHost: AppConfig.tcpHost,
+    tcpPort: AppConfig.tcpPort,
   );
 
   // Wire the serial bridge to publish events to the local event bus.
@@ -74,8 +77,6 @@ class _VendingAppState extends State<VendingApp> {
   }
 
   Future<void> _loadTheme() async {
-    // In local mode, the default palette is always used.
-    // Theme updates from admin would trigger a setState here.
     if (!mounted) return;
     setState(() => VendingColors.apply(VendingPalette.defaults));
   }

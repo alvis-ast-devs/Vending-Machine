@@ -10,16 +10,18 @@
 //   Slot 51-55 → bit 45-49
 //
 // Perintah Serial dari Frontend:
-//   DROP_SLOT_XX  → jalankan motor slot XX
+//   DROP_SLOT_XX  → jalankan motor slot XX (dengan limit switch detection)
+//   RESET_SLOT_XX → putar motor sebentar untuk melepaskan dari limit switch
 //   DETECT        → simulasi user terdeteksi
 //   KEY_X / X     → input digit keypad (0-9)
 //   ACCEPT        → konfirmasi
 //   CANCEL        → batal
 //
 // Event Serial ke Frontend:
-//   READY, BUSY_XX, SUCCESS_XX, ERROR_*
+//   READY, BUSY_XX, SUCCESS_XX, WARNING_NO_LIMIT_XX, ERROR_*
 //   EVENT_USER_DETECTED, EVENT_KEY_X, EVENT_ACCEPT, EVENT_CANCEL
 //   EVENT_SLOT_XX_EMPTY, EVENT_SLOT_XX_PRESENT (dari shift input)
+//   RESET_OK_XX (hasil RESET_SLOT_XX)
 // =============================================================================
 
 #include "shift_output.h"
@@ -32,6 +34,10 @@ const size_t MAX_COMMAND_LENGTH = 40;
 
 // Interval baca shift register input (ms).
 const unsigned long INPUT_READ_INTERVAL_MS = 100;
+// Timeout untuk menunggu sensor LOW setelah motor mulai berputar (ms).
+// Motor di posisi 180° (switch tertekan/HIGH) saat idle, perlu waktu
+// untuk menjauh dari switch sebelum bisa mendeteksi drop berikutnya.
+const unsigned long SENSOR_LOW_TIMEOUT_MS = 800;
 
 // ─── State ───────────────────────────────────────────────────────────────────
 String commandBuffer;
@@ -41,18 +47,54 @@ unsigned long lastInputRead = 0;
 //  RELAY / MOTOR CONTROL (menggunakan shift register output)
 // =============================================================================
 
-/// Aktifkan relay untuk satu slot, tahan MOTOR_RUN_TIME_MS, matikan.
+/// Aktifkan relay untuk satu slot dengan limit switch detection.
+/// Menggunakan dua-fase deteksi:
+///   Fase 1: Tunggu sensor LOW (motor menjauh dari switch, max SENSOR_LOW_TIMEOUT_MS)
+///   Fase 2: Tunggu sensor HIGH lagi (motor sampai 180 derajat, drop berhasil)
+/// Jika timeout di fase 2, motor tetap berhenti (safety fallback).
 void runMotorForSlot(const String &slotCode) {
   Serial.print(F("BUSY_"));
   Serial.println(slotCode);
 
+  // Mulai motor
   shiftOutput.setSlotActive(slotCode, true);
   shiftOutput.flush();
-  delay(MOTOR_RUN_TIME_MS);
+
+  const unsigned long startTime = millis();
+  bool dropConfirmed = false;
+
+  // -- FASE 1: Tunggu sensor LOW (motor menjauh dari switch) --
+  // Sensor awalnya HIGH (posisi 180 derajat sebelumnya). Tunggu LOW.
+  while (millis() - startTime < SENSOR_LOW_TIMEOUT_MS) {
+    shiftInput.readAll();
+    const int8_t bit = shiftInput.slotToBit(slotCode);
+    if (bit >= 0 && !shiftInput.readBit((uint8_t)bit)) {
+      break;  // Sensor LOW -> motor sudah mulai berputar
+    }
+    delay(5);
+  }
+
+  // -- FASE 2: Tunggu sensor HIGH lagi (motor sampai 180 derajat) --
+  // Motor sudah berputar, sekarang tunggu switch tertekan lagi.
+  while (millis() - startTime < MOTOR_RUN_TIME_MS) {
+    shiftInput.readAll();
+    const int8_t bit = shiftInput.slotToBit(slotCode);
+    if (bit >= 0 && shiftInput.readBit((uint8_t)bit)) {
+      dropConfirmed = true;  // Sensor HIGH -> 180 derajat tercapai
+      break;
+    }
+    delay(5);
+  }
+
+  // Matikan motor
   shiftOutput.setSlotActive(slotCode, false);
   shiftOutput.flush();
 
-  Serial.print(F("SUCCESS_"));
+  if (dropConfirmed) {
+    Serial.print(F("SUCCESS_"));
+  } else {
+    Serial.print(F("WARNING_NO_LIMIT_"));
+  }
   Serial.println(slotCode);
 }
 
@@ -175,6 +217,26 @@ void processCommand(String command) {
   if (command.isEmpty()) return;
 
   if (processTestInput(command)) return;
+
+  // RESET_SLOT_XX: putar motor sebentar untuk melepaskan dari limit switch
+  const String resetPrefix = "RESET_SLOT_";
+  if (command.startsWith(resetPrefix)) {
+    const String slotCode = command.substring(resetPrefix.length());
+    if (!isValidSlotCode(slotCode)) {
+      Serial.print(F("ERROR_INVALID_SLOT_"));
+      Serial.println(slotCode);
+      return;
+    }
+    // Putar motor sebentar untuk menjauh dari switch
+    shiftOutput.setSlotActive(slotCode, true);
+    shiftOutput.flush();
+    delay(300);
+    shiftOutput.setSlotActive(slotCode, false);
+    shiftOutput.flush();
+    Serial.print(F("RESET_OK_"));
+    Serial.println(slotCode);
+    return;
+  }
 
   const String commandPrefix = "DROP_SLOT_";
   if (!command.startsWith(commandPrefix)) {

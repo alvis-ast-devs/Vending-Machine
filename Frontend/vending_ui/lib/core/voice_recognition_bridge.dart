@@ -61,6 +61,7 @@ class VoiceRecognitionBridge {
       );
 
       _listening = true;
+      debugPrint('[VoiceBridge] ✅ Voice recognition MULAI');
 
       // Listen to stdout for JSON results.
       _process!.stdout
@@ -69,9 +70,11 @@ class VoiceRecognitionBridge {
           .listen(
         (line) {
           if (line.trim().isEmpty) return;
+          debugPrint('[VoiceBridge] 🎤 Sedang mendengarkan... (data diterima)');
           try {
             final json = jsonDecode(line.trim()) as Map<String, dynamic>;
             final result = VoiceRecognitionResult.fromJson(json);
+            debugPrint('[VoiceBridge] 📝 Transcript: ${result.transcript}, Amount: ${result.amount}');
             if (!_disposed) {
               _resultController.add(result);
             }
@@ -110,20 +113,24 @@ class VoiceRecognitionBridge {
   /// Stop the voice recognition by sending STOP to stdin.
   void stopListening() {
     if (!_listening || _process == null) return;
+    debugPrint('[VoiceBridge] 🛑 Menghentikan voice recognition...');
     try {
       _process!.stdin.writeln('STOP');
     } catch (_) {
       // Process may have already exited.
     }
     _listening = false;
+    debugPrint('[VoiceBridge] ⏹️ Voice recognition BERHENTI');
   }
 
   void dispose() {
+    debugPrint('[VoiceBridge] 🗑️ Disposing voice recognition bridge...');
     _disposed = true;
     stopListening();
     _process?.kill(ProcessSignal.sigterm);
     _process = null;
     _resultController.close();
+    debugPrint('[VoiceBridge] ⏹️ Voice recognition BERHENTI (disposed)');
   }
 
   String _defaultScriptPath() {

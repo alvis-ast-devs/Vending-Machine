@@ -4,13 +4,27 @@ enum VendingRoute { ad, tutorial, home, menu, payment, finish }
 
 enum MachineSocketStatus { connecting, connected, disconnected }
 
+/// Connection mode for ESP32 communication.
+enum ConnectionMode {
+  /// No hardware - use Flutter's internal mock.
+  mock,
+
+  /// Direct serial port (COM3, etc).
+  serial,
+
+  /// TCP socket connection (for mock_esp32.py --tcp).
+  tcp,
+}
+
 class AppConfig {
   const AppConfig._();
 
+  /// Whether real hardware is connected.
   static const bool hardwareEnabled = bool.fromEnvironment(
     'HARDWARE_ENABLED',
     defaultValue: false,
   );
+
   static const bool voicePaymentEnabled = bool.fromEnvironment(
     'VOICE_PAYMENT_ENABLED',
     defaultValue: true,
@@ -23,6 +37,36 @@ class AppConfig {
   );
 
   static const int serialBaudRate = 115200;
+
+  /// Connection mode: mock, serial, or tcp.
+  /// When hardwareEnabled is true, this determines the transport.
+  static ConnectionMode get connectionMode {
+    if (!hardwareEnabled) return ConnectionMode.mock;
+    final mode = String.fromEnvironment(
+      'CONNECTION_MODE',
+      defaultValue: 'serial',
+    );
+    switch (mode.toLowerCase()) {
+      case 'tcp':
+        return ConnectionMode.tcp;
+      case 'serial':
+        return ConnectionMode.serial;
+      default:
+        return ConnectionMode.serial;
+    }
+  }
+
+  /// TCP host for mock ESP32 connection (default: localhost).
+  static const String tcpHost = String.fromEnvironment(
+    'TCP_HOST',
+    defaultValue: '127.0.0.1',
+  );
+
+  /// TCP port for mock ESP32 connection.
+  static const int tcpPort = int.fromEnvironment(
+    'TCP_PORT',
+    defaultValue: 8888,
+  );
 
   static const double portraitAspectRatio = 9 / 16;
   static const Size initialWindowSize = Size(540, 960);
