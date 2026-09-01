@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mock ESP32 for Smart Vending Machine - Serial Communication Simulator"""
-import sys, time, threading, argparse
+import sys, time, threading, argparse, select
 from datetime import datetime
 
 class MockESP32:
@@ -8,6 +8,8 @@ class MockESP32:
         self.verbose = verbose
         self.busy_slots = set()
         self.slot_status = {}
+        self.tcp_clients = []
+        self.lock = threading.Lock()
         for i in range(1, 46): self.slot_status[f"{i:02d}"] = "PRESENT"
         for i in range(51, 56): self.slot_status[str(i)] = "PRESENT"
 
@@ -19,6 +21,12 @@ class MockESP32:
     def send_event(self, event):
         print(event, flush=True)
         self.log(f"TX: {event}")
+        with self.lock:
+            dead = []
+            for c in self.tcp_clients:
+                try: c.sendall((event + "\n").encode())
+                except: dead.append(c)
+            for c in dead: self.tcp_clients.remove(c)
 
     def process_command(self, command):
         cmd = command.strip().upper()
@@ -83,7 +91,7 @@ class MockESP32:
         e = sum(1 for v in self.slot_status.values() if v=="EMPTY")
         b = len(self.busy_slots)
         self.send_event(f"STATUS: {p} PRESENT, {e} EMPTY, {b} BUSY")
-        self.send_event(f"STATUS: Busy: {",".join(sorted(self.busy_slots)) or "none"}")
+        self.send_event(f"STATUS: Busy: {','.join(sorted(self.busy_slots)) or 'none'}")
 
     def _help(self):
         for l in [
@@ -98,6 +106,42 @@ class MockESP32:
             "STATUS         - Show status",
             "HELP           - This help",
         ]: self.send_event(l)
+
+def tcp_server(mock, port):
+    import socket
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("0.0.0.0", port))
+    srv.listen(1)
+    print(f"TCP listening on port {port}")
+    while True:
+        c, a = srv.accept()
+        print(f"Client connected: {a}")
+        with mock.lock: mock.tcp_clients.append(c)
+        c.sendall(b"READY\n")
+        buf = ""
+        while True:
+            try:
+                d = c.recv(1024)
+                if not d: break
+                buf += d.decode("utf-8",errors="ignore")
+                while "\n" in buf:
+                    line, buf = buf.split("\n",1)
+                    if line.strip(): mock.process_command(line.strip())
+            except: break
+        with mock.lock:
+            if c in mock.tcp_clients: mock.tcp_clients.remove(c)
+        c.close()
+        print(f"Client disconnected: {a}")
+
+def stdin_reader(mock):
+    try:
+        while True:
+            try:
+                cmd = input("> ")
+                mock.process_command(cmd)
+            except EOFError: break
+    except KeyboardInterrupt: pass
 
 def main():
     p = argparse.ArgumentParser(description="Mock ESP32")
@@ -120,36 +164,14 @@ def main():
                 if line: mock.process_command(line)
             time.sleep(0.01)
     elif args.tcp:
-        import socket
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind(("0.0.0.0", args.tcp))
-        srv.listen(1)
-        print(f"TCP listening on port {args.tcp}")
-        while True:
-            c, a = srv.accept()
-            print(f"Client: {a}")
-            c.sendall(b"READY\n")
-            buf = ""
-            while True:
-                try:
-                    d = c.recv(1024)
-                    if not d: break
-                    buf += d.decode("utf-8",errors="ignore")
-                    while "\n" in buf:
-                        line, buf = buf.split("\n",1)
-                        if line.strip(): mock.process_command(line.strip())
-                except: break
-            c.close()
+        print("=== Mock ESP32 (TCP + stdin Mode) ===")
+        print("Type commands HERE or connect Flutter via TCP")
+        t = threading.Thread(target=tcp_server, args=(mock, args.tcp), daemon=True)
+        t.start()
+        stdin_reader(mock)
     else:
         print("=== Mock ESP32 (Virtual Mode) ===")
         print("Type commands (HELP for help)")
-        try:
-            while True:
-                try:
-                    cmd = input("> ")
-                    mock.process_command(cmd)
-                except EOFError: break
-        except KeyboardInterrupt: print("\nBye")
+        stdin_reader(mock)
 
 if __name__ == "__main__": main()
