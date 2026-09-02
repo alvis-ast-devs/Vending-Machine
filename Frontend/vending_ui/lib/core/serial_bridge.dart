@@ -181,13 +181,14 @@ class SerialBridge {
         const MachineEvent(type: 'KEYPAD_CANCEL', data: {}),
       );
     } else if (normalized.startsWith('EVENT_KEY_') &&
-        normalized.length == 10) {
-      final digit = normalized.substring(9);
-      if (RegExp(r'^\d$').hasMatch(digit)) {
-        eventBus.publish(
-          MachineEvent(type: 'KEYPAD_DIGIT', data: {'digit': digit}),
-        );
-      }
+        normalized.length == 11) {
+      final digit = normalized.substring(10);
+      // if (RegExp(r'^\d$').hasMatch(digit)) {
+      debugPrint('[SerialBridge] Handling digit: ${digit}');
+      eventBus.publish(
+        MachineEvent(type: 'KEYPAD_DIGIT', data: {'digit': digit}),
+      );
+      // }
     } else if (normalized.startsWith('WARNING_NO_LIMIT_')) {
       final slotCode = normalized.substring(17);
       eventBus.publish(MachineEvent(

@@ -26,6 +26,7 @@
 
 #include "shift_output.h"
 #include "shift_input.h"
+#include "keypad.h"
 
 #define INFRARED 14
 
@@ -47,6 +48,8 @@ const unsigned long SENSOR_LOW_TIMEOUT_MS = 800;
 // ─── State ───────────────────────────────────────────────────────────────────
 String commandBuffer;
 unsigned long lastInputRead = 0;
+unsigned long lastKeypadPoll = 0;
+const unsigned long KEYPAD_POLL_INTERVAL_MS = 10;  // debounce-safe polling interval
 
 // =============================================================================
 //  RELAY / MOTOR CONTROL (menggunakan shift register output)
@@ -224,24 +227,24 @@ void processCommand(String command) {
   if (processTestInput(command)) return;
 
   // RESET_SLOT_XX: putar motor sebentar untuk melepaskan dari limit switch
-  const String resetPrefix = "RESET_SLOT_";
-  if (command.startsWith(resetPrefix)) {
-    const String slotCode = command.substring(resetPrefix.length());
-    if (!isValidSlotCode(slotCode)) {
-      Serial.print(F("ERROR_INVALID_SLOT_"));
-      Serial.println(slotCode);
-      return;
-    }
-    // Putar motor sebentar untuk menjauh dari switch
-    shiftOutput.setSlotActive(slotCode, true);
-    shiftOutput.flush();
-    delay(300);
-    shiftOutput.setSlotActive(slotCode, false);
-    shiftOutput.flush();
-    Serial.print(F("RESET_OK_"));
-    Serial.println(slotCode);
-    return;
-  }
+  // const String resetPrefix = "RESET_SLOT_";
+  // if (command.startsWith(resetPrefix)) {
+  //   const String slotCode = command.substring(resetPrefix.length());
+  //   if (!isValidSlotCode(slotCode)) {
+  //     Serial.print(F("ERROR_INVALID_SLOT_"));
+  //     Serial.println(slotCode);
+  //     return;
+  //   }
+  //   // Putar motor sebentar untuk menjauh dari switch
+  //   shiftOutput.setSlotActive(slotCode, true);
+  //   shiftOutput.flush();
+  //   delay(300);
+  //   shiftOutput.setSlotActive(slotCode, false);
+  //   shiftOutput.flush();
+  //   Serial.print(F("RESET_OK_"));
+  //   Serial.println(slotCode);
+  //   return;
+  // }
 
   const String commandPrefix = "DROP_SLOT_";
   if (!command.startsWith(commandPrefix)) {
@@ -290,8 +293,12 @@ void setup() {
 
   commandBuffer.reserve(MAX_COMMAND_LENGTH);
 
+  // Inisialisasi keypad matrix 4x4.
+  keypadInit();
+
   Serial.println(F("READY"));
   Serial.println(F("SHIFT_REG: 7×74HC595 OUT + 7×74HC165 IN initialized"));
+  Serial.println(F("KEYPAD: 4x4 matrix ready (physical + serial input)"));
   Serial.println(F("TEST_COMMANDS: DETECT, 0-9, ACCEPT, CANCEL, DECLINED, DEBUG_INPUT, ALL_OFF"));
 }
 
@@ -317,10 +324,23 @@ void loop() {
     commandBuffer += incoming;
   }
 
-  // ── 2. Polling shift register input (sensor) ──
   const unsigned long now = millis();
-  if (now - lastInputRead >= INPUT_READ_INTERVAL_MS) {
-    lastInputRead = now;
-    pollShiftInput();
+  // ── 3. Polling keypad matrix ──
+  if (now - lastKeypadPoll >= KEYPAD_POLL_INTERVAL_MS) {
+    lastKeypadPoll = now;
+    char key;
+    KeypadEvent event = keypadPoll(key);
+
+    if (event == KEYPAD_PRESSED || event == KEYPAD_HELD) {
+      if (keypadIsDigit(key)) {
+        emitKeypadDigit(key);
+      } else if (keypadIsAccept(key)) {
+        emitKeypadAccept();
+      } else if (keypadIsCancel(key)) {
+        emitKeypadCancel();
+      }
+      // spare keys (B, C) diabaikan untuk saat ini
+    }
   }
+  delay(1000);
 }
