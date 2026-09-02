@@ -27,6 +27,11 @@
 #include "shift_output.h"
 #include "shift_input.h"
 
+#define INFRARED 14
+
+
+
+
 // ─── Konfigurasi ─────────────────────────────────────────────────────────────
 const uint32_t SERIAL_BAUD_RATE = 115200;
 const unsigned long MOTOR_RUN_TIME_MS = 1500;

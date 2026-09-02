@@ -23,7 +23,7 @@ class AppConfig {
   /// Serial port name for ESP32 communication (e.g. COM3 on Windows).
   static const String serialPort = String.fromEnvironment(
     'SERIAL_PORT',
-    defaultValue: 'COM3',
+    defaultValue: 'COM7',
   );
 
   static const int serialBaudRate = 115200;

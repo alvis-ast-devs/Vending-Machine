@@ -133,6 +133,7 @@ class SerialBridge {
       if (available <= 0) return null;
       final data = _port!.read(available, timeout: 100);
       if (data.isEmpty) return null;
+      debugPrint('[SerialBridge] Received: ${String.fromCharCodes(data)}');
       return String.fromCharCodes(data);
     } catch (_) {
       return null;
