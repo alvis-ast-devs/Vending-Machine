@@ -66,8 +66,7 @@ class _VendingControllerState extends State<VendingController> {
   VendingRoute _currentRoute = VendingRoute.home;
   MachineSocketStatus _socketStatus = MachineSocketStatus.connecting;
   MediaCatalog _mediaCatalog = MediaCatalog.empty;
-  final StreamController<MachineEvent> _keypadEvents =
-      StreamController<MachineEvent>.broadcast();
+  final StreamController<MachineEvent> _keypadEvents = StreamController<MachineEvent>.broadcast();
   Timer? _homeIdleTimer;
   bool _resolvingMedia = false;
   bool _pendingUserDetection = false;
