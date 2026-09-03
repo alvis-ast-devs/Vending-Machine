@@ -47,7 +47,7 @@ class SerialBridge {
       }
       final normalized = line.trim().toUpperCase();
       if (normalized == 'SUCCESS_$slotCode') return normalized;
-      if (normalized == 'WARNING_NO_LIMIT_$slotCode') return normalized;
+      if (normalized == 'WARNING_NO_DROP_$slotCode') return normalized;
       if (normalized.startsWith('ERROR_')) {
         throw SerialBridgeError('ESP32 menolak perintah: $normalized');
       }
@@ -189,11 +189,11 @@ class SerialBridge {
         MachineEvent(type: 'KEYPAD_DIGIT', data: {'digit': digit}),
       );
       // }
-    } else if (normalized.startsWith('WARNING_NO_LIMIT_')) {
-      final slotCode = normalized.substring(17);
+    } else if (normalized.startsWith('WARNING_NO_DROP_')) {
+      final slotCode = normalized.substring(16);
       eventBus.publish(MachineEvent(
         type: 'DROP_WARNING',
-        data: {'slot': slotCode, 'reason': 'limit_switch_not_triggered'},
+        data: {'slot': slotCode, 'reason': 'no_ir_detected'},
       ));
     } else if (normalized.startsWith('RESET_OK_')) {
       final slotCode = normalized.substring(9);

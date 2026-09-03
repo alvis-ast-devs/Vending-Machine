@@ -16,8 +16,8 @@
 //   Row 3 (OUTPUT) -> GPIO 5
 //   Row 4 (OUTPUT) -> GPIO 16
 //
-//   Col 1 (INPUT_PULLDOWN) -> GPIO 25
-//   Col 2 (INPUT_PULLDOWN) -> GPIO 26
+//   Col 1 (INPUT_PULLDOWN) -> GPIO 17
+//   Col 2 (INPUT_PULLDOWN) -> GPIO 18
 //   Col 3 (INPUT_PULLDOWN) -> GPIO 32
 //   Col 4 (INPUT_PULLDOWN) -> GPIO 33
 //
@@ -32,6 +32,9 @@
 // Contoh:
 //   R4 + C3 = GPIO16 + GPIO32 = '#'
 // =============================================================================
+// CATATAN: GPIO 25 & 26 TIDAK dipakai sebagai kolom karena merupakan pin
+// DATA/CLOCK shift register output (74HC595) untuk relay motor. Kolom keypad
+// memakai GPIO 17/18/32/33 yang bebas & mendukung INPUT_PULLDOWN.
 
 #ifndef KEYPAD_H
 #define KEYPAD_H
@@ -61,16 +64,17 @@ static const uint8_t KEYPAD_ROW_PINS[4] = {
 // -----------------------------------------------------------------------------
 // Semua pin column menggunakan internal pull-down.
 //
-// C1 = GPIO25
-// C2 = GPIO26
+// C1 = GPIO17
+// C2 = GPIO18
 // C3 = GPIO32
 // C4 = GPIO33
 //
-// Keempat GPIO ini mendukung INPUT_PULLDOWN.
+// Keempat GPIO ini mendukung INPUT_PULLDOWN dan tidak bentrok dengan pin lain
+// (shift output 74HC595 = GPIO 25/26/27, IR receiver = GPIO 14).
 
 static const uint8_t KEYPAD_COL_PINS[4] = {
-  25,   // C1
-  26,   // C2
+  17,   // C1
+  18,   // C2
   32,   // C3
   33    // C4
 };
@@ -317,7 +321,7 @@ static void keypadInit() {
 
   Serial.println(
     F(
-      "COLS: C1=GPIO25 C2=GPIO26 C3=GPIO32 C4=GPIO33"
+      "COLS: C1=GPIO17 C2=GPIO18 C3=GPIO32 C4=GPIO33"
     )
   );
 

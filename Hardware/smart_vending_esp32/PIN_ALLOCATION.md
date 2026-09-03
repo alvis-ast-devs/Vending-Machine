@@ -5,11 +5,17 @@
 | No | Komponen | Jumlah | Keterangan |
 |----|----------|--------|------------|
 | 1 | 74HC595 (Shift Register Output) | 7 chip | 56 output -> 50 relay -> 50 motor |
-| 2 | 74HC165 (Shift Register Input) | 7 chip | 56 input -> 50 sensor slot + 5 IR receiver |
-| 3 | IR Receiver (Sensor Infrared) | 5 unit | Deteksi barang jatuh (terhubung ke 74HC165) |
-| 4 | Ultrasonic HC-SR04 (Sensor Jarak) | 2 unit | Deteksi kehadiran orang di depan mesin |
-| 5 | Keypad Matrix 4x4 | 1 unit | Input angka oleh user (0-9, A-D) |
-| 6 | Serial UART | 1 channel | Komunikasi dengan PC/Frontend |
+| 2 | IR Receiver (Sensor Infrared) | ~10 unit | Deteksi barang jatuh; semua OUT diparalel ke 1 GPIO |
+| 3 | Ultrasonic HC-SR04 (Sensor Jarak) | 2 unit | Deteksi kehadiran orang di depan mesin |
+| 4 | Keypad Matrix 4x4 | 1 unit | Input angka oleh user (0-9, A-D) |
+| 5 | Serial UART | 1 channel | Komunikasi dengan PC/Frontend |
+
+> **Catatan:** Shift Register Input (74HC165) **TIDAK dipakai lagi**. Penghentian
+> dinamo dilakukan oleh **IR receiver array**: motor berputar sampai produk jatuh
+> memotong beam salah satu IR receiver, lalu motor langsung dimatikan. Semua OUT
+> receiver digabung (paralel) ke satu jalur yang masuk ke 1 GPIO ESP32, sehingga
+> jika SATU saja receiver terpicu, motor langsung berhenti (tahan terhadap
+> kegagalan satu-dua sensor).
 
 ---
 
@@ -57,100 +63,66 @@ GND   (pin 8)  --> GND
 
 ---
 
-## 2. Shift Register Input (74HC165) - 3 Pin
+## 2. IR Receiver Array (Drop Detection) - 1 Pin
 
-Membaca 50 sensor slot + 5 IR receiver = 55 input dari 56 yang tersedia.
+**Fungsi:** Mendeteksi produk yang benar-benar jatuh dari slot, lalu menghentikan
+dinamo yang sedang berputar.
+
+**Arsitektur (OR paralel):**
+```
+IR Rx #1 OUT ──┐
+IR Rx #2 OUT ──┤
+IR Rx #3 OUT ──┼──(satu jalur bersama)──► GPIO 14 (ESP32, INPUT_PULLUP)
+   ...         │
+IR Rx #N OUT ──┘
+
+Semua VCC  --> 3.3V atau 5V (tergantung modul)
+Semua GND  --> GND bersama
+Transmitter IR (terpisah):
+  IR LED VCC --> 5V (power supply langsung)
+  IR LED GND --> GND (power supply langsung)
+  (TIDAK terhubung ke ESP32)
+```
+
+**Penting (kelistrikan paralel):**
+- Output modul IR harus **open-collector/open-drain** sehingga bisa di-OR
+  langsung ke satu jalur.
+- Jika modul memakai output push-pull, pasang **1 dioda OR (mis. 1N4148) dari
+  tiap OUT** ke jalur bersama + resistor pull-up (mis. 10k) ke 3.3V, supaya
+  modul tidak saling dorong.
+- Firmware hanya membaca **1 pin (GPIO 14)**, berapa pun jumlah receiver-nya.
+- Karena hanya satu motor yang berjalan dalam satu waktu, setiap produk yang
+  jatuh dari slot mana pun akan memicu jalur bersama.
+
+**Cara Kerja:**
+```
+1. Frontend kirim DROP_SLOT_XX
+2. ESP32 nyalakan relay motor slot XX (via 74HC595)
+3. Motor berputar mendorong produk
+4. Produk jatuh dan memotong beam salah satu IR receiver
+5. Jalur bersama berubah ke IR_ACTIVE_LEVEL (beam terblokir)
+6. ESP32 langsung matikan motor -> kirim SUCCESS_XX
+7. Jika tidak ada IR yang terpicu sampai MOTOR_RUN_TIME_MS (default 2000 ms),
+   motor tetap dimatikan -> kirim WARNING_NO_DROP_XX (safety timeout)
+```
+
+**Level Logika (kalibrasi `IR_ACTIVE_LEVEL` di firmware):**
+| Kondisi beam | Modul tipe A (umum) | Modul tipe B |
+|--------------|---------------------|--------------|
+| Beam terang (tidak ada barang) | OUT = LOW | OUT = HIGH |
+| Beam terblokir (barang jatuh) | OUT = HIGH | OUT = LOW |
+
+Default firmware = `IR_ACTIVE_LEVEL HIGH`. Jika modul Anda tipe B (aktif-LOW),
+ubah konstanta tersebut menjadi `LOW`. Untuk memastikannya, kirim perintah serial
+`IR_STATUS` lalu blokir beam secara manual — baca level yang tercetak.
 
 | GPIO | Nama Pin | Arah | Komponen | Keterangan |
 |------|----------|------|----------|------------|
-| **32** | SR_IN_DATA | INPUT | 74HC165 pin 9 (Q7) chip terakhir | Data serial keluar |
-| **33** | SR_IN_CLOCK | OUTPUT | 74HC165 pin 2 (CLK) semua chip | Clock shift |
-| **14** | SR_IN_LOAD | OUTPUT | 74HC165 pin 1 (SH/LD) semua chip | Load paralel |
-
-**Wiring 74HC165 Daisy Chain:**
-```
-ESP32 GPIO 32 <-- Q7  (pin 9)  Chip #7 (terakhir)
-                   SER (pin 10) Chip #7 <-- Q7' (pin 9) Chip #6
-                                            SER (pin 10) Chip #6 <-- ... dst
-
-ESP32 GPIO 33 --> CLK  (pin 2) semua chip (paralel)
-ESP32 GPIO 14 --> SH/LD (pin 1) semua chip (paralel)
-
-CE (pin 15) --> LOW (chip enable, selalu aktif)
-VCC (pin 16) --> 5V
-GND (pin 8)  --> GND
-```
-
-**Mapping Input -> Bit:**
-| Bit Index | Fungsi | Keterangan |
-|-----------|--------|------------|
-| 0 - 49 | Sensor Slot 01-55 | 50 sensor produk |
-| 50 | IR Receiver 1 | Zona lampu 1 (slot 01-10) |
-| 51 | IR Receiver 2 | Zona lampu 2 (slot 11-20) |
-| 52 | IR Receiver 3 | Zona lampu 3 (slot 21-30) |
-| 53 | IR Receiver 4 | Zona lampu 4 (slot 31-40) |
-| 54 | IR Receiver 5 | Zona lampu 5 (slot 41-55) |
-| 55 | Tidak digunakan | Spare |
-
-**Cara Kerja:**
-```
-1. ESP32 pulsa GPIO 14 (LOAD) LOW selama 5 micro detik
-   -> Semua 56 input fisik di-load ke internal latch
-2. ESP32 clock sebanyak 56 kali via GPIO 33
-   -> Setiap clock, 1 bit bergeser keluar via GPIO 32
-3. ESP32 baca GPIO 32 di setiap clock -> dapatkan 56 bit status input
-```
+| **14** | IR_DROP | INPUT_PULLUP | Jalur bersama semua OUT IR receiver | Beam terblokir = produk jatuh |
 
 ---
 
-## 3. Sensor Infrared (IR Receiver) - Via 74HC165
-
-**Fungsi:** Mendeteksi apakah produk benar-benar jatuh dari slot.
-
-**Penting:**
-- Hanya RECEIVER yang terhubung ke 74HC165 (bukan ke GPIO langsung)
-- TRANSMITTER menggunakan power supply terpisah (langsung ke 5V/GND, tidak lewat ESP32)
-- 5 receiver untuk 5 zona di mesin
-
-**Wiring IR Receiver ke 74HC165:**
-```
-IR Receiver #1 OUT --> 74HC165 input bit 50
-IR Receiver #2 OUT --> 74HC165 input bit 51
-IR Receiver #3 OUT --> 74HC165 input bit 52
-IR Receiver #4 OUT --> 74HC165 input bit 53
-IR Receiver #5 OUT --> 74HC165 input bit 54
-
-IR Receiver VCC --> 3.3V atau 5V (tergantung modul)
-IR Receiver GND --> GND
-
-IR Transmitter (terpisah):
-IR LED VCC --> 5V (power supply langsung)
-IR LED GND --> GND (power supply langsung)
-(TIDAK terhubung ke ESP32 atau 74HC165)
-```
-
-**Cara Kerja:**
-```
-Normal (tidak ada barang jatuh):
-  Transmitter IR menyala -> Receiver mendapat cahaya IR -> Output LOW
-
-Barang jatuh (memotong beam):
-  Barang memblokir IR -> Receiver TIDAK dapat cahaya -> Output HIGH
-  -> 74HC165 detect bit HIGH -> ESP32 emit EVENT_SLOT_XX_DROP_CONFIRMED
-```
-
-**Mapping Zona:**
-| IR Receiver | Bit 74HC165 | Area di Mesin |
-|-------------|-------------|---------------|
-| Sensor 1 | bit 50 | Zona lampu 1 (slot 01-10) |
-| Sensor 2 | bit 51 | Zona lampu 2 (slot 11-20) |
-| Sensor 3 | bit 52 | Zona lampu 3 (slot 21-30) |
-| Sensor 4 | bit 53 | Zona lampu 4 (slot 31-40) |
-| Sensor 5 | bit 54 | Zona lampu 5 (slot 41-55) |
-
----
-
-## 4. Sensor Jarak Ultrasonic (HC-SR04) - 4 Pin
+## 3. Sensor Jarak Ultrasonic (HC-SR04) - 4 Pin
 
 **Fungsi:** Mendeteksi kehadiran orang di depan mesin vending.
 - Ada orang -> Frontend menampilkan tutorial
@@ -201,7 +173,7 @@ Contoh:
 
 ---
 
-## 5. Keypad Matrix 4x4 - 8 Pin
+## 4. Keypad Matrix 4x4 - 8 Pin
 
 **Fungsi:** Input angka oleh user untuk memilih slot produk.
 
@@ -222,19 +194,58 @@ Row4 [  *  ][  0  ][  #  ][  D  ]
 | D / * | CANCEL (batal) |
 | B, C | Tidak digunakan / spare |
 
-| GPIO | Nama Pin | Aarah | Komponen | Keterangan |
+**Kolom memakai GPIO 17/18/32/33** karena GPIO 25/26 adalah pin DATA/CLOCK shift
+register output (74HC595) yang dipakai relay motor. Keempat GPIO kolom ini
+mendukung `INPUT_PULLDOWN` sehingga tidak butuh resistor 10k eksternal.
+
+| GPIO | Nama Pin | Arah | Komponen | Keterangan |
 |------|----------|------|----------|------------|
 | **2** | KEYPAD_ROW1 | OUTPUT | Keypad row 1 | Scanning row 1 |
 | **4** | KEYPAD_ROW2 | OUTPUT | Keypad row 2 | Scanning row 2 |
 | **5** | KEYPAD_ROW3 | OUTPUT | Keypad row 3 | Scanning row 3 |
 | **16** | KEYPAD_ROW4 | OUTPUT | Keypad row 4 | Scanning row 4 |
-| **34** | KEYPAD_COL1 | INPUT | Keypad kolom 1 | Baca kolom 1 |
-| **35** | KEYPAD_COL2 | INPUT | Keypad kolom 2 | Baca kolom 2 |
-| **36** | KEYPAD_COL3 | INPUT | Keypad kolom 3 | Baca kolom 3 |
-| **39** | KEYPAD_COL4 | INPUT | Keypad kolom 4 | Baca kolom 4 |
+| **17** | KEYPAD_COL1 | INPUT_PULLDOWN | Keypad kolom 1 | Baca kolom 1 |
+| **18** | KEYPAD_COL2 | INPUT_PULLDOWN | Keypad kolom 2 | Baca kolom 2 |
+| **32** | KEYPAD_COL3 | INPUT_PULLDOWN | Keypad kolom 3 | Baca kolom 3 |
+| **33** | KEYPAD_COL4 | INPUT_PULLDOWN | Keypad kolom 4 | Baca kolom 4 |
 
 **Wiring Keypad 4x4 ke ESP32:**
 ```
 Keypad Pin Layout (biasanya kabel warna):
-  1 = Row 1    -> GPIO 2  (OUTPUT)
-  2 = Row 2    -> GPIO 4  (
+  1 = Row 1    -> GPIO 2   (OUTPUT)
+  2 = Row 2    -> GPIO 4   (OUTPUT)
+  3 = Row 3    -> GPIO 5   (OUTPUT)
+  4 = Row 4    -> GPIO 16  (OUTPUT)
+  5 = Col 1    -> GPIO 17  (INPUT_PULLDOWN)
+  6 = Col 2    -> GPIO 18  (INPUT_PULLDOWN)
+  7 = Col 3    -> GPIO 32  (INPUT_PULLDOWN)
+  8 = Col 4    -> GPIO 33  (INPUT_PULLDOWN)
+```
+*(Urutan pin fisik bisa berbeda tergantung merk keypad — pastikan mapping row/col
+sesuai, karena baris & kolom bisa ditukar tanpa mengubah fungsi selama konsisten.)*
+
+---
+
+## Ringkasan Semua GPIO
+
+| GPIO | Fungsi | Arah |
+|------|--------|------|
+| 2 | Keypad Row 1 | OUTPUT |
+| 4 | Keypad Row 2 | OUTPUT |
+| 5 | Keypad Row 3 | OUTPUT |
+| 13 | Ultrasonic #2 ECHO | INPUT |
+| 14 | IR Receiver Array (jalur bersama) | INPUT_PULLUP |
+| 16 | Keypad Row 4 | OUTPUT |
+| 17 | Keypad Col 1 | INPUT_PULLDOWN |
+| 18 | Keypad Col 2 | INPUT_PULLDOWN |
+| 19 | Ultrasonic #1 TRIG | OUTPUT |
+| 21 | Ultrasonic #1 ECHO | INPUT |
+| 22 | Ultrasonic #2 TRIG | OUTPUT |
+| 25 | 74HC595 DATA (SER) | OUTPUT |
+| 26 | 74HC595 CLOCK (SRCLK) | OUTPUT |
+| 27 | 74HC595 LATCH (RCLK) | OUTPUT |
+| 32 | Keypad Col 3 | INPUT_PULLDOWN |
+| 33 | Keypad Col 4 | INPUT_PULLDOWN |
+
+> GPIO 34-39 & lainnya dikosongkan / cadangan. GPIO 34-39 bersifat input-only
+> tanpa pull internal, jadi tidak dipakai untuk keypad.
