@@ -211,29 +211,56 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     ),
                     if (widget.isListening || widget.voiceMessage != null) ...[
                       const SizedBox(height: 16),
-                      Text(
-                        widget.voiceMessage ??
-                            'Mikrofon sedang mendengarkan...',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: VendingColors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                      if (widget.isProcessing) ...[
+                        // Status sukses: pembayaran sudah masuk.
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle_rounded,
+                              color: VendingColors.accent,
+                              size: 34,
+                            ),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                widget.voiceMessage ??
+                                    'Pembayaran diterima',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: VendingColors.accent,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Bayar: ${formatRupiah(widget.paidAmount)}'
-                        ' • Sisa: ${formatRupiah(widget.remainingAmount)}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: widget.remainingAmount > 0
-                              ? VendingColors.warning
-                              : VendingColors.accent,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
+                      ] else ...[
+                        // Text(
+                        //   widget.voiceMessage ??
+                        //       'Mikrofon sedang mendengarkan...',
+                        //   textAlign: TextAlign.center,
+                        //   style: TextStyle(
+                        //     color: VendingColors.white,
+                        //     fontSize: 16,
+                        //     fontWeight: FontWeight.w700,
+                        //   ),
+                        // ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Bayar: ${formatRupiah(widget.paidAmount)}'
+                          ' • Sisa: ${formatRupiah(widget.remainingAmount)}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: widget.remainingAmount > 0
+                                ? VendingColors.warning
+                                : VendingColors.accent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ],
                 ),

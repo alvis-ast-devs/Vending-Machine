@@ -45,6 +45,12 @@ class AppConfig {
   static const Duration menuIdleDuration = Duration(seconds: 30);
   static const Duration adImageDuration = Duration(seconds: 8);
   static const Duration paymentDuration = Duration(seconds: 60);
+
+  /// Berapa lama halaman pembayaran menampilkan status "pembayaran diterima"
+  /// sebelum berpindah ke halaman "Terima Kasih" (drop produk berjalan
+  /// di latar belakang, tanpa menunggu deteksi IR).
+  static const Duration paymentSuccessDuration = Duration(seconds: 3);
+
   static const Duration finishDuration = Duration(seconds: 5);
   static const Duration requestTimeout = Duration(seconds: 8);
   static const Duration paymentProcessingTimeout = Duration(minutes: 2);

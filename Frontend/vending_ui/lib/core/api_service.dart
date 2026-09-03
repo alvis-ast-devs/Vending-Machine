@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:vending_ui/core/app_config.dart';
 import 'package:vending_ui/core/app_utils.dart';
 import 'package:vending_ui/core/event_bus.dart';
@@ -129,21 +130,23 @@ class ApiService {
 
   // ─── Payment ──────────────────────────────────────────────────────────────
 
-  /// Process a payment: reduce stock via serial bridge or mock, log in-memory.
+  /// Proses pembayaran sukses: kirim perintah drop (tanpa menunggu deteksi
+  /// IR) lalu kurangi stok lokal. Stok tetap berkurang walau serial gagal —
+  /// pembayaran sudah diterima, jangan sampai stok tidak pernah berkurang.
   Future<void> submitPaymentSuccess({
     required String transactionId,
     required List<String> slotCodes,
   }) async {
     for (final slotCode in slotCodes) {
-      // Drop the product via serial bridge.
+      // Kirim perintah drop ke ESP32 (fire-and-forget, tanpa ACK IR).
       if (_serialBridge != null) {
         try {
-          await _serialBridge!.dropSlot(slotCode);
+          _serialBridge!.sendDropCommand(slotCode);
         } catch (e) {
-          throw ApiException('Gagal mengeluarkan produk slot $slotCode: $e');
+          debugPrint('[Payment] Gagal mengirim drop slot $slotCode: $e');
         }
       }
-      // Reduce stock locally.
+      // Kurangi stok lokal segera.
       await _data.reduceStock(slotCode);
     }
   }
@@ -206,33 +209,33 @@ class ApiService {
     // Ping "ready" dari skrip Python — bukan hasil pembayaran.
     if (result.status == 'ready') return;
 
-    // Skrip gagal (mikrofon / library tidak tersedia, dsb).
-    if (result.error != null) {
-      eventBus.publish(MachineEvent(
-        type: 'VOICE_PAYMENT_ERROR',
-        data: {
-          'transaction_id': transactionId,
-          'paid_amount': _voicePaidAmount,
-          'remaining_amount': _voiceRemainingAmount,
-          'message': result.error,
-        },
-      ));
-      return;
-    }
+    // // Skrip gagal (mikrofon / library tidak tersedia, dsb).
+    // if (result.error != null) {
+    //   eventBus.publish(MachineEvent(
+    //     type: 'VOICE_PAYMENT_ERROR',
+    //     data: {
+    //       'transaction_id': transactionId,
+    //       'paid_amount': _voicePaidAmount,
+    //       'remaining_amount': _voiceRemainingAmount,
+    //       'message': result.error,
+    //     },
+    //   ));
+    //   return;
+    // }
 
-    // Suara tidak dikenali / nominal nol.
-    if (result.amount <= 0) {
-      eventBus.publish(MachineEvent(
-        type: 'VOICE_PAYMENT_UNRECOGNIZED',
-        data: {
-          'transaction_id': transactionId,
-          'paid_amount': _voicePaidAmount,
-          'remaining_amount': _voiceRemainingAmount,
-          'message': 'Tidak terdengar jelas, silakan coba lagi.',
-        },
-      ));
-      return;
-    }
+    // // Suara tidak dikenali / nominal nol.
+    // if (result.amount <= 0) {
+    //   eventBus.publish(MachineEvent(
+    //     type: 'VOICE_PAYMENT_UNRECOGNIZED',
+    //     data: {
+    //       'transaction_id': transactionId,
+    //       'paid_amount': _voicePaidAmount,
+    //       'remaining_amount': _voiceRemainingAmount,
+    //       'message': 'Tidak terdengar jelas, silakan coba lagi.',
+    //     },
+    //   ));
+    //   return;
+    // }
 
     _voicePaidAmount += result.amount;
     final paid = _voicePaidAmount.clamp(0, totalAmount);

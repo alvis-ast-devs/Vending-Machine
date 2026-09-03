@@ -127,16 +127,25 @@ void main() {
     expect(find.text('01:00'), findsOneWidget);
     expect(find.textContaining('Sisa:'), findsOneWidget);
 
-    // Simulasi pembayaran sukses -> stok berkurang & layar selesai.
+    // Pembayaran sukses (tanpa menunggu IR) -> status diterima tampil
+    // beberapa detik, lalu halaman "Terima Kasih" 5 detik, lalu home.
     await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
     await tester.pump(const Duration(milliseconds: 400));
     await settleIo(tester);
+    expect(find.text('PEMBAYARAN'), findsOneWidget);
+    expect(
+      find.textContaining('Pembayaran berhasil diterima'),
+      findsOneWidget,
+    );
+
+    await tester.pump(AppConfig.paymentSuccessDuration);
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Terima Kasih!'), findsOneWidget);
 
     final productsAfter = await LocalDataService.instance.loadProducts();
     expect(productsAfter.firstWhere((p) => p.slotCode == '01').stock, 9);
 
-    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(AppConfig.finishDuration);
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Selamat Datang'), findsOneWidget);
 
@@ -301,6 +310,14 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
     await tester.pump(const Duration(milliseconds: 400));
     await settleIo(tester);
+    expect(find.text('PEMBAYARAN'), findsOneWidget);
+    expect(
+      find.textContaining('Pembayaran berhasil diterima'),
+      findsOneWidget,
+    );
+
+    await tester.pump(AppConfig.paymentSuccessDuration);
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Terima Kasih!'), findsOneWidget);
 
     await unmountApp(tester);
@@ -524,17 +541,30 @@ void main() {
     expect(find.textContaining('Bayar: Rp 5.000'), findsOneWidget);
     expect(find.textContaining('Sisa: Rp 5.000'), findsOneWidget);
 
-    // Python mengenali "lima ribu" lagi -> lunas -> layar selesai.
+    // Python mengenali "lima ribu" lagi -> lunas -> status diterima tampil
+    // beberapa detik, lalu "Terima Kasih" 5 detik, lalu kembali home.
     api.voiceBridge.emitResultForTesting(
       const VoiceRecognitionResult(transcript: 'lima ribu', amount: 5000),
     );
     await tester.pump();
     await settleIo(tester);
     await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('PEMBAYARAN'), findsOneWidget);
+    expect(
+      find.textContaining('Pembayaran berhasil diterima'),
+      findsOneWidget,
+    );
+
+    await tester.pump(AppConfig.paymentSuccessDuration);
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Terima Kasih!'), findsOneWidget);
 
     final productsAfter = await LocalDataService.instance.loadProducts();
     expect(productsAfter.firstWhere((p) => p.slotCode == '01').stock, 9);
+
+    await tester.pump(AppConfig.finishDuration);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Selamat Datang'), findsOneWidget);
 
     await unmountApp(tester);
   });

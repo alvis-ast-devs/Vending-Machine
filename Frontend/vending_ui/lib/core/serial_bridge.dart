@@ -57,6 +57,14 @@ class SerialBridge {
     );
   }
 
+  /// Send a drop command TANPA menunggu konfirmasi IR/ACK dari ESP32.
+  /// Dipakai setelah pembayaran diterima: mesin tetap men-drop produk,
+  /// sementara aplikasi langsung memproses stok.
+  void sendDropCommand(String slotCode) {
+    _ensureConnection();
+    _writeLine('DROP_SLOT_$slotCode');
+  }
+
   /// Send a test command to the ESP32 (DETECT, ACCEPT, CANCEL, KEY_0…9).
   void sendTestInput(String inputName) {
     _ensureConnection();

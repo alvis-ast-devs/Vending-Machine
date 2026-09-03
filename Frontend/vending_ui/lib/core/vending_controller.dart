@@ -158,6 +158,9 @@ class _VendingControllerState extends State<VendingController> {
   }
 
   void _handleVoicePaymentEvent(MachineEvent event) {
+    // Pembayaran sudah sukses: abaikan hasil suara yang datang belakangan.
+    if (_processingPayment) return;
+
     final paidAmount = event.data['paid_amount'];
     final remainingAmount = event.data['remaining_amount'];
     setState(() {
@@ -400,7 +403,9 @@ class _VendingControllerState extends State<VendingController> {
     }
   }
 
-  /// Selesaikan pembayaran: kurangi stok, keluarkan produk, lalu ke layar selesai.
+  /// Pembayaran sukses: tampilkan "pembayaran diterima" beberapa detik di
+  /// halaman pembayaran, lalu ke halaman "Terima Kasih", lalu kembali home.
+  /// Drop produk dikerjakan di latar belakang — TANPA menunggu deteksi IR.
   Future<void> _completePayment() async {
     if (!mounted ||
         _currentRoute != VendingRoute.payment ||
@@ -409,27 +414,39 @@ class _VendingControllerState extends State<VendingController> {
       return;
     }
 
+    final slotCodes = _checkoutSlotCodes;
+    final transactionId = _checkoutTransactionId;
+
+    // Kirim perintah drop & kurangi stok di latar belakang; jangan menahan
+    // UI menunggu konfirmasi IR dari ESP32.
+    unawaited(_processDropsInBackground(slotCodes, transactionId));
+
     setState(() {
       _processingPayment = true;
       _paymentError = null;
+      _voicePaymentListening = false;
+      _voicePaymentMessage = 'Pembayaran berhasil diterima';
     });
 
+    // Tampilkan status sukses beberapa detik, lalu ke halaman terima kasih.
+    await Future<void>.delayed(AppConfig.paymentSuccessDuration);
+    if (!mounted || _currentRoute != VendingRoute.payment) return;
+    setState(() => _processingPayment = false);
+    _goTo(VendingRoute.finish);
+  }
+
+  /// Drop produk + kurangi stok tetap berjalan walau UI sudah lanjut.
+  Future<void> _processDropsInBackground(
+    List<String> slotCodes,
+    String? transactionId,
+  ) async {
     try {
       await _apiService.submitPaymentSuccess(
-        transactionId: _checkoutTransactionId!,
-        slotCodes: _checkoutSlotCodes,
+        transactionId: transactionId ?? '',
+        slotCodes: slotCodes,
       );
-      if (mounted && _currentRoute == VendingRoute.payment) {
-        _goTo(VendingRoute.finish);
-      }
-    } on ApiException catch (error) {
-      if (mounted && _currentRoute == VendingRoute.payment) {
-        setState(() => _paymentError = error.message);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _processingPayment = false);
-      }
+    } catch (e) {
+      debugPrint('[Payment] Gagal memproses produk di latar belakang: $e');
     }
   }
 
