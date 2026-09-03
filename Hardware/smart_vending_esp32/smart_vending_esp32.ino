@@ -32,14 +32,14 @@
 // Jalur ini masuk ke satu GPIO; jika salah satu beam terblokir, motor berhenti.
 #define IR_PIN 14
 // Level saat beam TERBLOKIR (produk jatuh). Ganti ke LOW bila modul aktif-LOW.
-#define IR_ACTIVE_LEVEL HIGH
+#define IR_ACTIVE_LEVEL LOW
 // Lama beam harus stabil terblokir sebelum motor dihentikan (ms).
 #define IR_DEBOUNCE_MS 40
 
 // ─── Konfigurasi ─────────────────────────────────────────────────────────────
 const uint32_t SERIAL_BAUD_RATE = 115200;
 // Safety timeout: motor dipaksa berhenti bila IR tidak mendeteksi produk jatuh.
-const unsigned long MOTOR_RUN_TIME_MS = 2000;
+const unsigned long MOTOR_RUN_TIME_MS = 5000;
 const size_t MAX_COMMAND_LENGTH = 40;
 
 // ─── State ───────────────────────────────────────────────────────────────────

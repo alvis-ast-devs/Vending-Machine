@@ -569,7 +569,9 @@ void main() {
     await unmountApp(tester);
   });
 
-  testWidgets('suara tidak dikenali menampilkan pesan ulangi', (tester) async {
+  testWidgets('hasil suara tanpa nominal tidak mengubah pembayaran', (
+    tester,
+  ) async {
     final api = ApiService();
     await tester.pumpWidget(
       MaterialApp(
@@ -595,12 +597,10 @@ void main() {
       const VoiceRecognitionResult(transcript: null, amount: 0),
     );
     await tester.pump();
-    expect(
-      find.text('Tidak terdengar jelas, silakan coba lagi.'),
-      findsOneWidget,
-    );
-    // Tetap di halaman pembayaran.
+    // Tetap di halaman pembayaran dan nominal tidak berubah.
     expect(find.text('PEMBAYARAN'), findsOneWidget);
+    expect(find.textContaining('Bayar: Rp 0'), findsOneWidget);
+    expect(find.textContaining('Sisa: Rp 10.000'), findsOneWidget);
 
     await unmountApp(tester);
   });
