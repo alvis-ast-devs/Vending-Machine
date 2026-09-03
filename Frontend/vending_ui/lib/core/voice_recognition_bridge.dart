@@ -46,7 +46,7 @@ class VoiceRecognitionBridge {
 
     final resolvedScript = scriptPath ?? _defaultScriptPath();
     final scriptFile = File(resolvedScript);
-    if (!await scriptFile.exists()) {
+    if (!scriptFile.existsSync()) {
       debugPrint(
         '[VoiceBridge] Script tidak ditemukan: $resolvedScript',
       );

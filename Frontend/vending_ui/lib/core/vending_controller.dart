@@ -8,6 +8,7 @@ import 'package:vending_ui/core/app_theme.dart';
 import 'package:vending_ui/core/event_bus.dart';
 import 'package:vending_ui/core/media_asset.dart';
 import 'package:vending_ui/feature/ad_screen.dart';
+import 'package:vending_ui/feature/admin_screen.dart';
 import 'package:vending_ui/feature/finish_screen.dart';
 import 'package:vending_ui/feature/home_screen.dart';
 import 'package:vending_ui/feature/menu_screen.dart';
@@ -253,6 +254,7 @@ class _VendingControllerState extends State<VendingController> {
         }
         break;
       case VendingRoute.menu:
+      case VendingRoute.admin:
         _keypadEvents.add(event);
         break;
       case VendingRoute.payment:
@@ -504,6 +506,15 @@ class _VendingControllerState extends State<VendingController> {
           idleDuration: widget.menuIdleDuration,
           onCheckout: _openPayment,
           onCancel: _returnHome,
+          onAdminMode: () => _goTo(VendingRoute.admin),
+        );
+      case VendingRoute.admin:
+        return AdminScreen(
+          key: const ValueKey(VendingRoute.admin),
+          apiService: _apiService,
+          keypadEvents: _keypadEvents.stream,
+          idleDuration: widget.menuIdleDuration,
+          onExit: () => _goTo(VendingRoute.menu),
         );
       case VendingRoute.payment:
         return PaymentScreen(

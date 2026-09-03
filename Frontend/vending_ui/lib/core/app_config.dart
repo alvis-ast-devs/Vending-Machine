@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum VendingRoute { ad, tutorial, home, menu, payment, finish }
+enum VendingRoute { ad, tutorial, home, menu, payment, finish, admin }
 
 enum MachineSocketStatus { connecting, connected, disconnected }
 
@@ -28,6 +28,12 @@ class AppConfig {
 
   static const int serialBaudRate = 115200;
 
+  /// Kode rahasia untuk membuka Admin Mode dari halaman Menu.
+  /// Bisa diganti saat build via --dart-define=ADMIN_CODE=xxxx.
+  static const String adminCode = String.fromEnvironment(
+    'ADMIN_CODE',
+    defaultValue: '9999',
+  );
 
   static const double portraitAspectRatio = 9 / 16;
   static const Size initialWindowSize = Size(540, 960);

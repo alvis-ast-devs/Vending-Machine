@@ -66,6 +66,23 @@ class ApiService {
       ..sort((a, b) => a.slotCode.compareTo(b.slotCode));
   }
 
+  /// Semua produk termasuk yang nonaktif — dipakai layar Admin supaya
+  /// admin bisa melihat dan mengisi stok slot apa pun.
+  Future<List<Product>> fetchAllProducts() async {
+    final products = await _data.loadProducts();
+    return products..sort((a, b) => a.slotCode.compareTo(b.slotCode));
+  }
+
+  /// Isi stok satu slot hingga penuh (nilai default stok penuh).
+  /// Tidak ada perintah ke ESP32: admin mengisi produk secara fisik,
+  /// stok hanya dicatat ulang di data lokal.
+  Future<Product?> restockSlot(String slotCode) async {
+    return _data.restockProduct(
+      slotCode,
+      quantity: AppConfig.defaultFullStock,
+    );
+  }
+
   // ─── Media ────────────────────────────────────────────────────────────────
 
   Future<MediaCatalog> fetchMediaCatalog() async {

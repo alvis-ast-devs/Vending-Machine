@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:vending_ui/core/product_model.dart';
 
 /// Manages all local data: products JSON file and media folder scanning.
@@ -16,6 +17,13 @@ class LocalDataService {
   static LocalDataService get instance {
     _instance ??= LocalDataService._();
     return _instance!;
+  }
+
+  /// Test-only: reset status inisialisasi supaya [init] bisa dipanggil lagi
+  /// dengan direktori baru yang segar.
+  @visibleForTesting
+  void resetForTesting() {
+    _initialized = false;
   }
 
   /// Initialize with a custom directory (useful for testing).
@@ -35,18 +43,20 @@ class LocalDataService {
     );
 
     // Create directories if they don't exist.
-    await _assetsDir.create(recursive: true);
-    await Directory('${_assetsDir.path}${Platform.pathSeparator}product_images')
-        .create(recursive: true);
-    await Directory('${_assetsDir.path}${Platform.pathSeparator}ads')
-        .create(recursive: true);
-    await Directory('${_assetsDir.path}${Platform.pathSeparator}tutorial')
-        .create(recursive: true);
-    await Directory('${_assetsDir.path}${Platform.pathSeparator}homescreen')
-        .create(recursive: true);
+    // Operasi file sinkron: file-nya kecil (products.json), dan membuat
+    // semua future selesai via microtask sehingga mudah dites di Flutter.
+    _assetsDir.createSync(recursive: true);
+    Directory('${_assetsDir.path}${Platform.pathSeparator}product_images')
+        .createSync(recursive: true);
+    Directory('${_assetsDir.path}${Platform.pathSeparator}ads')
+        .createSync(recursive: true);
+    Directory('${_assetsDir.path}${Platform.pathSeparator}tutorial')
+        .createSync(recursive: true);
+    Directory('${_assetsDir.path}${Platform.pathSeparator}homescreen')
+        .createSync(recursive: true);
 
     // Seed products if file doesn't exist.
-    if (!await _productsFile.exists()) {
+    if (!_productsFile.existsSync()) {
       await _seedDefaultProducts();
     }
 
@@ -60,7 +70,7 @@ class LocalDataService {
 
   Future<List<Product>> loadProducts() async {
     try {
-      final content = await _productsFile.readAsString();
+      final content = _productsFile.readAsStringSync();
       final List<dynamic> jsonList = jsonDecode(content) as List<dynamic>;
       final products = jsonList
           .map(
@@ -91,7 +101,7 @@ class LocalDataService {
         )
         .toList();
     final encoder = JsonEncoder.withIndent('  ');
-    await _productsFile.writeAsString(encoder.convert(jsonList));
+    _productsFile.writeAsStringSync(encoder.convert(jsonList));
   }
 
   Future<Product?> reduceStock(String slotCode) async {
@@ -139,6 +149,7 @@ class LocalDataService {
   Future<void> _seedDefaultProducts() async {
     final products = <Product>[];
     int id = 1;
+    // Sinkron: dipanggil dari init() / loadProducts().
 
     // Slots 01–40: regular snacks
     for (var i = 1; i <= 40; i++) {

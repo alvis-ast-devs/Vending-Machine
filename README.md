@@ -94,6 +94,23 @@ flutter build windows --release
 | `G` | Declined |
 | `H` | Payment success (simulasi) |
 
+## Admin Mode (Isi Stok)
+
+Untuk mengisi stok vending machine tanpa mengedit `products.json` secara manual:
+
+1. Dari halaman Menu, ketik **kode rahasia admin** (default: `9999`) via keypad fisik atau keyboard.
+2. Dashboard **ADMIN — ISI STOK** terbuka otomatis, menampilkan stok semua slot (`x/10`).
+3. Ketik kode slot (2 digit, misal `05`) lalu tekan **ACCEPT** → stok slot itu langsung diisi penuh (`10`).
+4. Tekan **CANCEL** untuk kembali ke menu biasa (CANCEL sekali menghapus kode yang belum di-ACCEPT).
+
+Mengganti kode rahasia:
+
+```bash
+flutter run -d windows --dart-define=ADMIN_CODE=2468
+```
+
+atau ubah `AppConfig.adminCode` di `lib/core/app_config.dart`. Jangan gunakan kode yang sama dengan kode slot (01–45, 51–55); kode default `9999` aman.
+
 ## Media
 
 - **Foto produk:** Letakkan file gambar di `assets/product_images/` dengan nama `{slot_code}.{ext}` (misal `01.png`, `15.jpg`)

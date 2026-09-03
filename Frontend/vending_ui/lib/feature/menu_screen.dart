@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:vending_ui/core/api_service.dart';
+import 'package:vending_ui/core/app_config.dart';
 import 'package:vending_ui/core/app_theme.dart';
 import 'package:vending_ui/core/app_utils.dart';
 import 'package:vending_ui/core/event_bus.dart';
@@ -18,6 +19,7 @@ class MenuScreen extends StatefulWidget {
   final Duration idleDuration;
   final CheckoutCallback onCheckout;
   final VoidCallback onCancel;
+  final VoidCallback onAdminMode;
 
   const MenuScreen({
     super.key,
@@ -26,6 +28,7 @@ class MenuScreen extends StatefulWidget {
     required this.idleDuration,
     required this.onCheckout,
     required this.onCancel,
+    required this.onAdminMode,
   });
 
   @override
@@ -132,11 +135,25 @@ class _MenuScreenState extends State<MenuScreen> {
     if (event.type == 'KEYPAD_DIGIT') {
       final digit = event.data['digit']?.toString() ?? '';
       if (RegExp(r'^\d$').hasMatch(digit)) {
-        setState(() {
-          _keypadBuffer = _keypadBuffer.length >= 2
-              ? digit
-              : '$_keypadBuffer$digit';
-        });
+        final adminCode = AppConfig.adminCode;
+        final candidate = '$_keypadBuffer$digit';
+        String nextBuffer;
+        if (adminCode.startsWith(candidate)) {
+          // Bagian dari kode admin — biarkan buffer tumbuh (bisa > 2 digit).
+          nextBuffer = candidate;
+        } else if (candidate.length <= 2) {
+          nextBuffer = candidate;
+        } else {
+          // Bukan awalan kode admin → perilaku lama: mulai dari digit ini.
+          nextBuffer = digit;
+        }
+
+        if (nextBuffer == adminCode) {
+          setState(() => _keypadBuffer = '');
+          widget.onAdminMode();
+          return;
+        }
+        setState(() => _keypadBuffer = nextBuffer);
       }
       return;
     }
