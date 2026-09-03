@@ -27,5 +27,11 @@ void main() {
     bus.dispose();
     bus.publish(const MachineEvent(type: 'KEYPAD_ACCEPT', data: {}));
     expect(events, hasLength(1));
+
+    // start() ulang memungkinkan bus dipakai lagi (mis. di pengujian).
+    bus.start(onEvent: events.add, onStatusChanged: statuses.add);
+    bus.publish(const MachineEvent(type: 'KEYPAD_DIGIT', data: {'digit': '1'}));
+    expect(events, hasLength(2));
+    expect(statuses.last, MachineSocketStatus.connected);
   });
 }

@@ -134,6 +134,10 @@ class _VendingControllerState extends State<VendingController> {
 
     if (_isCurrentVoicePaymentEvent(event)) {
       _handleVoicePaymentEvent(event);
+      if (event.type == 'VOICE_PAYMENT_CONFIRMED') {
+        // Nominal sudah lunas: lanjutkan proses pengeluaran produk.
+        unawaited(_completePayment());
+      }
       return;
     }
 
@@ -163,7 +167,6 @@ class _VendingControllerState extends State<VendingController> {
           event.type == 'VOICE_PAYMENT_LISTENING' ||
           event.type == 'VOICE_PAYMENT_UPDATE' ||
           event.type == 'VOICE_PAYMENT_UNRECOGNIZED';
-      _processingPayment = event.type == 'VOICE_PAYMENT_CONFIRMED';
       final message = event.data['message'];
       _voicePaymentMessage = message is String ? message : null;
       _paymentError = event.type == 'VOICE_PAYMENT_ERROR'
@@ -220,7 +223,7 @@ class _VendingControllerState extends State<VendingController> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.keyH) {
-      unawaited(_submitMockPaymentSuccess());
+      unawaited(_completePayment());
       return KeyEventResult.handled;
     }
 
@@ -383,7 +386,7 @@ class _VendingControllerState extends State<VendingController> {
           _voicePaymentListening = session.status == 'listening';
           _voicePaidAmount = session.paidAmount;
           _voiceRemainingAmount = session.remainingAmount;
-          _voicePaymentMessage = '';
+          _voicePaymentMessage = null;
           _paymentError = null;
         });
       }
@@ -397,7 +400,8 @@ class _VendingControllerState extends State<VendingController> {
     }
   }
 
-  Future<void> _submitMockPaymentSuccess() async {
+  /// Selesaikan pembayaran: kurangi stok, keluarkan produk, lalu ke layar selesai.
+  Future<void> _completePayment() async {
     if (!mounted ||
         _currentRoute != VendingRoute.payment ||
         _processingPayment ||
@@ -530,7 +534,7 @@ class _VendingControllerState extends State<VendingController> {
           errorMessage: _paymentError,
           showMockPaymentAction:
               !AppConfig.voicePaymentEnabled && !widget.hardwareEnabled,
-          onMockPaymentSuccess: _submitMockPaymentSuccess,
+          onMockPaymentSuccess: _completePayment,
           onExpired: _returnHome,
           onCancel: _returnHome,
         );

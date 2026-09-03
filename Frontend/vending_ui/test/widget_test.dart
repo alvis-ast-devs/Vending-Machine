@@ -11,6 +11,7 @@ import 'package:vending_ui/core/local_data_service.dart';
 import 'package:vending_ui/core/product_model.dart';
 import 'package:vending_ui/core/theme_settings.dart';
 import 'package:vending_ui/core/vending_controller.dart';
+import 'package:vending_ui/core/voice_recognition_bridge.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -484,6 +485,94 @@ void main() {
 
     expect(withImage.imageUrl, 'http://127.0.0.1:8000/media/snack-01.png');
     expect(withoutImage.imageUrl, isNull);
+  });
+
+  testWidgets('hasil suara Python memperbarui halaman pembayaran', (
+    tester,
+  ) async {
+    final api = ApiService();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: VendingTheme.data,
+        home: VendingController(
+          apiService: api,
+          eventSource: eventBus,
+          hardwareEnabled: false,
+        ),
+      ),
+    );
+    await settleIo(tester);
+
+    await goToMenu(tester);
+
+    // Pilih produk 01 (Rp 10.000) lalu buka pembayaran.
+    await tester.tap(find.byKey(const ValueKey('slot-01')));
+    await tester.pump();
+    eventBus.publish(const MachineEvent(type: 'KEYPAD_ACCEPT', data: {}));
+    await tester.pump(const Duration(milliseconds: 400));
+    await settleIo(tester);
+    expect(find.text('PEMBAYARAN'), findsOneWidget);
+
+    // Sebelum ada nominal: sisa = total.
+    expect(find.textContaining('Sisa: Rp 10.000'), findsOneWidget);
+
+    // Python mengenali "lima ribu".
+    api.voiceBridge.emitResultForTesting(
+      const VoiceRecognitionResult(transcript: 'lima ribu', amount: 5000),
+    );
+    await tester.pump();
+    expect(find.textContaining('Bayar: Rp 5.000'), findsOneWidget);
+    expect(find.textContaining('Sisa: Rp 5.000'), findsOneWidget);
+
+    // Python mengenali "lima ribu" lagi -> lunas -> layar selesai.
+    api.voiceBridge.emitResultForTesting(
+      const VoiceRecognitionResult(transcript: 'lima ribu', amount: 5000),
+    );
+    await tester.pump();
+    await settleIo(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Terima Kasih!'), findsOneWidget);
+
+    final productsAfter = await LocalDataService.instance.loadProducts();
+    expect(productsAfter.firstWhere((p) => p.slotCode == '01').stock, 9);
+
+    await unmountApp(tester);
+  });
+
+  testWidgets('suara tidak dikenali menampilkan pesan ulangi', (tester) async {
+    final api = ApiService();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: VendingTheme.data,
+        home: VendingController(
+          apiService: api,
+          eventSource: eventBus,
+          hardwareEnabled: false,
+        ),
+      ),
+    );
+    await settleIo(tester);
+
+    await goToMenu(tester);
+    await tester.tap(find.byKey(const ValueKey('slot-01')));
+    await tester.pump();
+    eventBus.publish(const MachineEvent(type: 'KEYPAD_ACCEPT', data: {}));
+    await tester.pump(const Duration(milliseconds: 400));
+    await settleIo(tester);
+    expect(find.text('PEMBAYARAN'), findsOneWidget);
+
+    api.voiceBridge.emitResultForTesting(
+      const VoiceRecognitionResult(transcript: null, amount: 0),
+    );
+    await tester.pump();
+    expect(
+      find.text('Tidak terdengar jelas, silakan coba lagi.'),
+      findsOneWidget,
+    );
+    // Tetap di halaman pembayaran.
+    expect(find.text('PEMBAYARAN'), findsOneWidget);
+
+    await unmountApp(tester);
   });
 }
 

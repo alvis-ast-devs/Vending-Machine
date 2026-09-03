@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:vending_ui/core/app_config.dart';
+import 'package:vending_ui/core/app_utils.dart';
+import 'package:vending_ui/core/event_bus.dart';
 import 'package:vending_ui/core/local_data_service.dart';
 import 'package:vending_ui/core/media_asset.dart';
 import 'package:vending_ui/core/product_model.dart';
@@ -48,6 +50,10 @@ class ApiService {
   final LocalDataService _data = LocalDataService.instance;
   SerialBridge? _serialBridge;
   final VoiceRecognitionBridge _voiceBridge = VoiceRecognitionBridge();
+
+  StreamSubscription<VoiceRecognitionResult>? _voiceResultSubscription;
+  int _voicePaidAmount = 0;
+  int _voiceTotalAmount = 0;
 
   int _nextAdId = 1000;
   int _nextProductId = 2000;
@@ -154,8 +160,33 @@ class ApiService {
       throw ApiException('VOICE_PAYMENT_ENABLED belum diaktifkan.');
     }
 
+    // Reset akumulasi nominal untuk sesi baru.
+    _voicePaidAmount = 0;
+    _voiceTotalAmount = totalAmount;
+
     // Start the Python voice recognition script.
     await _voiceBridge.startListening();
+
+    // Teruskan setiap nominal yang dikenali Python ke UI via event bus.
+    await _voiceResultSubscription?.cancel();
+    _voiceResultSubscription = _voiceBridge.results.listen(
+      (result) => _handleVoiceRecognitionResult(
+        transactionId: transactionId,
+        totalAmount: totalAmount,
+        result: result,
+      ),
+    );
+
+    // Beri tahu UI bahwa sesi mulai mendengarkan.
+    eventBus.publish(MachineEvent(
+      type: 'VOICE_PAYMENT_LISTENING',
+      data: {
+        'transaction_id': transactionId,
+        'paid_amount': 0,
+        'remaining_amount': totalAmount,
+        'message': null,
+      },
+    ));
 
     return VoicePaymentSession(
       transactionId: transactionId,
@@ -166,14 +197,76 @@ class ApiService {
     );
   }
 
+  /// Convert satu hasil dari skrip Python menjadi event `VOICE_PAYMENT_*`.
+  void _handleVoiceRecognitionResult({
+    required String transactionId,
+    required int totalAmount,
+    required VoiceRecognitionResult result,
+  }) {
+    // Ping "ready" dari skrip Python — bukan hasil pembayaran.
+    if (result.status == 'ready') return;
+
+    // Skrip gagal (mikrofon / library tidak tersedia, dsb).
+    if (result.error != null) {
+      eventBus.publish(MachineEvent(
+        type: 'VOICE_PAYMENT_ERROR',
+        data: {
+          'transaction_id': transactionId,
+          'paid_amount': _voicePaidAmount,
+          'remaining_amount': _voiceRemainingAmount,
+          'message': result.error,
+        },
+      ));
+      return;
+    }
+
+    // Suara tidak dikenali / nominal nol.
+    if (result.amount <= 0) {
+      eventBus.publish(MachineEvent(
+        type: 'VOICE_PAYMENT_UNRECOGNIZED',
+        data: {
+          'transaction_id': transactionId,
+          'paid_amount': _voicePaidAmount,
+          'remaining_amount': _voiceRemainingAmount,
+          'message': 'Tidak terdengar jelas, silakan coba lagi.',
+        },
+      ));
+      return;
+    }
+
+    _voicePaidAmount += result.amount;
+    final paid = _voicePaidAmount.clamp(0, totalAmount);
+    final remaining = (totalAmount - paid).clamp(0, totalAmount);
+    final done = paid >= totalAmount;
+
+    eventBus.publish(MachineEvent(
+      type: done ? 'VOICE_PAYMENT_CONFIRMED' : 'VOICE_PAYMENT_UPDATE',
+      data: {
+        'transaction_id': transactionId,
+        'paid_amount': paid,
+        'remaining_amount': remaining,
+        'message': done
+            ? 'Pembayaran lunas, terima kasih!'
+            : 'Diterima ${formatRupiah(paid)}, sisa ${formatRupiah(remaining)}',
+      },
+    ));
+  }
+
+  int get _voiceRemainingAmount =>
+      (_voiceTotalAmount - _voicePaidAmount).clamp(0, _voiceTotalAmount);
+
   /// Cancel an active voice payment session.
   Future<void> cancelVoicePayment(String transactionId) async {
+    await _voiceResultSubscription?.cancel();
+    _voiceResultSubscription = null;
     _voiceBridge.stopListening();
   }
 
   // ─── Cleanup ──────────────────────────────────────────────────────────────
 
   void close() {
+    unawaited(_voiceResultSubscription?.cancel());
+    _voiceResultSubscription = null;
     _voiceBridge.dispose();
   }
 }

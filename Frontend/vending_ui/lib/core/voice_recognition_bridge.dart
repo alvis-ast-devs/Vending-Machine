@@ -9,12 +9,25 @@ class VoiceRecognitionResult {
   final String? transcript;
   final int amount;
 
-  const VoiceRecognitionResult({this.transcript, this.amount = 0});
+  /// Non-payment status ping, e.g. `ready` when the script starts.
+  final String? status;
+
+  /// Error message when the script failed (mic, library, network, ...).
+  final String? error;
+
+  const VoiceRecognitionResult({
+    this.transcript,
+    this.amount = 0,
+    this.status,
+    this.error,
+  });
 
   factory VoiceRecognitionResult.fromJson(Map<String, dynamic> json) {
     return VoiceRecognitionResult(
       transcript: json['transcript'] as String?,
       amount: (json['amount'] as num?)?.toInt() ?? 0,
+      status: json['status'] as String?,
+      error: json['error'] as String?,
     );
   }
 }
@@ -108,6 +121,12 @@ class VoiceRecognitionBridge {
       debugPrint('[VoiceBridge] Failed to start: $e');
       _listening = false;
     }
+  }
+
+  /// Test-only: inject a result as if the Python script had emitted it.
+  @visibleForTesting
+  void emitResultForTesting(VoiceRecognitionResult result) {
+    _resultController.add(result);
   }
 
   /// Stop the voice recognition by sending STOP to stdin.

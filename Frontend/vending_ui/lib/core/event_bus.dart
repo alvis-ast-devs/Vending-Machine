@@ -49,6 +49,9 @@ class LocalEventBus implements MachineEventSource {
     required void Function(MachineEvent event) onEvent,
     required void Function(MachineSocketStatus status) onStatusChanged,
   }) {
+    // start() bisa dipanggil ulang setelah dispose() (mis. di pengujian).
+    _disposed = false;
+    _lastStatus = MachineSocketStatus.disconnected;
     _onEvent = onEvent;
     _onStatusChanged = onStatusChanged;
     // Consider the hardware channel "connected" immediately in local mode.
