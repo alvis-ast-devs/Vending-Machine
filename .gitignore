@@ -15,3 +15,6 @@ Thumbs.db
 Frontend/vending_ui/uploads/
 Frontend/vending_ui/assets/
 Frontend/vending_ui/products.json
+
+# Final production build (large bundled artifacts: exe, python runtime, model)
+final-build/

@@ -185,7 +185,7 @@ def transcribe_offline(model, audio) -> str:
     return " ".join(segment.text for segment in segments).strip()
 
 
-def listen_loop() -> None:
+def listen_loop(stop_event: threading.Event) -> None:
     """Main loop: listen to microphone, parse amounts, output JSON lines."""
     try:
         import speech_recognition as speech
@@ -209,7 +209,19 @@ def listen_loop() -> None:
         recognizer.adjust_for_ambient_noise(source, duration=1)
         write_output({"status": "ready"})
 
-        while True:
+        # IMPORTANT: only start watching stdin AFTER the model and mic are
+        # ready. A thread blocked reading stdin while native modules load
+        # (numpy / ctranslate2 / pyaudio DLLs) deadlocks the whole process
+        # on Windows. The app spawns us with an open stdin pipe, so waiting
+        # for STOP too early freezes the script before it can transcribe.
+        stdin_thread = threading.Thread(
+            target=watch_stdin,
+            args=(stop_event,),
+            daemon=True,
+        )
+        stdin_thread.start()
+
+        while not stop_event.is_set():
             try:
                 audio = recognizer.listen(source, timeout=60, phrase_time_limit=None)
             except speech.WaitTimeoutError:
@@ -240,15 +252,8 @@ def watch_stdin(stop_event: threading.Event) -> None:
 if __name__ == "__main__":
     stop_event = threading.Event()
 
-    stdin_thread = threading.Thread(
-        target=watch_stdin,
-        args=(stop_event,),
-        daemon=True,
-    )
-    stdin_thread.start()
-
     try:
-        listen_loop()
+        listen_loop(stop_event)
     except KeyboardInterrupt:
         pass
     finally:
