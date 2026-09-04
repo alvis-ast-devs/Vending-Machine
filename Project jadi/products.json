@@ -1,0 +1,352 @@
+[
+  {
+    "slot_code": "01",
+    "name": "Snack 01",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "02",
+    "name": "Snack 02",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "03",
+    "name": "Snack 03",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "04",
+    "name": "Snack 04",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "05",
+    "name": "Snack 05",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "06",
+    "name": "Snack 06",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "07",
+    "name": "Snack 07",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "08",
+    "name": "Snack 08",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "09",
+    "name": "Snack 09",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "10",
+    "name": "Snack 10",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "11",
+    "name": "Snack 11",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "12",
+    "name": "Snack 12",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "13",
+    "name": "Snack 13",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "14",
+    "name": "Snack 14",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "15",
+    "name": "Snack 15",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "16",
+    "name": "Snack 16",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "17",
+    "name": "Snack 17",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "18",
+    "name": "Snack 18",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "19",
+    "name": "Snack 19",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "20",
+    "name": "Snack 20",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "21",
+    "name": "Snack 21",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "22",
+    "name": "Snack 22",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "23",
+    "name": "Snack 23",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "24",
+    "name": "Snack 24",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "25",
+    "name": "Snack 25",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "26",
+    "name": "Snack 26",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "27",
+    "name": "Snack 27",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "28",
+    "name": "Snack 28",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "29",
+    "name": "Snack 29",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "30",
+    "name": "Snack 30",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "31",
+    "name": "Snack 31",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "32",
+    "name": "Snack 32",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "33",
+    "name": "Snack 33",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "34",
+    "name": "Snack 34",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "35",
+    "name": "Snack 35",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "36",
+    "name": "Snack 36",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "37",
+    "name": "Snack 37",
+    "price": 10000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "38",
+    "name": "Snack 38",
+    "price": 12000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "39",
+    "name": "Snack 39",
+    "price": 14000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "40",
+    "name": "Snack 40",
+    "price": 8000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "41",
+    "name": "Produk Besar 01",
+    "price": 20000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "42",
+    "name": "Produk Besar 02",
+    "price": 25000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "43",
+    "name": "Produk Besar 03",
+    "price": 30000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "44",
+    "name": "Produk Besar 04",
+    "price": 35000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "45",
+    "name": "Produk Besar 05",
+    "price": 40000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "51",
+    "name": "Premium 01",
+    "price": 25000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "52",
+    "name": "Premium 02",
+    "price": 30000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "53",
+    "name": "Premium 03",
+    "price": 35000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "54",
+    "name": "Premium 04",
+    "price": 40000,
+    "stock": 10,
+    "is_active": true
+  },
+  {
+    "slot_code": "55",
+    "name": "Premium 05",
+    "price": 45000,
+    "stock": 10,
+    "is_active": true
+  }
+]

@@ -26,6 +26,15 @@ class AppConfig {
     defaultValue: 'COM7',
   );
 
+  /// Folder dasar data lokal (berisi `assets/` dan `products.json`) saat
+  /// development, supaya media bisa dites tanpa build release. Kosong = pakai
+  /// folder di sebelah executable. Contoh:
+  /// flutter run -d windows --dart-define=ASSETS_BASE_PATH=C:\\repo\\Frontend\\vending_ui
+  static const String assetsBasePath = String.fromEnvironment(
+    'ASSETS_BASE_PATH',
+    defaultValue: '',
+  );
+
   static const int serialBaudRate = 115200;
 
   /// Kode rahasia untuk membuka Admin Mode dari halaman Menu.

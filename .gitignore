@@ -13,3 +13,5 @@ Thumbs.db
 
 # Uploaded media (user manages manually)
 Frontend/vending_ui/uploads/
+Frontend/vending_ui/assets/
+Frontend/vending_ui/products.json

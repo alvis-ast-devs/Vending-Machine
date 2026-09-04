@@ -360,6 +360,41 @@ void main() {
     await unmountApp(tester);
   });
 
+  testWidgets('USER_LEFT saat menu kembali ke Home', (tester) async {
+    final source = await pumpVending(tester);
+    await goToMenu(tester);
+    expect(find.text('PILIH PRODUK'), findsOneWidget);
+
+    // Sensor jarak mendeteksi orang pergi -> kembali ke Home (idle -> ad).
+    source.emit(const MachineEvent(type: 'USER_LEFT', data: {}));
+    await tester.pump(const Duration(milliseconds: 400));
+    await settleIo(tester);
+    expect(find.text('Selamat Datang'), findsOneWidget);
+
+    await unmountApp(tester);
+  });
+
+  testWidgets('USER_LEFT tidak mengganggu pembayaran yang berjalan', (
+    tester,
+  ) async {
+    final source = await pumpVending(tester);
+    await goToMenu(tester);
+
+    await tester.tap(find.byKey(const ValueKey('slot-01')));
+    await tester.pump();
+    source.emit(const MachineEvent(type: 'KEYPAD_ACCEPT', data: {}));
+    await tester.pump(const Duration(milliseconds: 400));
+    await settleIo(tester);
+    expect(find.text('PEMBAYARAN'), findsOneWidget);
+
+    source.emit(const MachineEvent(type: 'USER_LEFT', data: {}));
+    await tester.pump(const Duration(milliseconds: 400));
+    await settleIo(tester);
+    expect(find.text('PEMBAYARAN'), findsOneWidget);
+
+    await unmountApp(tester);
+  });
+
   // ─── Admin Mode ──────────────────────────────────────────────────────────
 
   testWidgets('kode rahasia admin membuka dashboard admin', (tester) async {

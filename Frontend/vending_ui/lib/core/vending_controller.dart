@@ -71,6 +71,7 @@ class _VendingControllerState extends State<VendingController> {
   Timer? _homeIdleTimer;
   bool _resolvingMedia = false;
   bool _pendingUserDetection = false;
+  bool _pendingUserLeft = false;
   int _itemCount = 0;
   int _totalPrice = 0;
   List<String> _checkoutSlotCodes = const [];
@@ -124,6 +125,22 @@ class _VendingControllerState extends State<VendingController> {
         return;
       }
       unawaited(_showTutorialOrHome());
+      return;
+    }
+
+    // Orang pergi (dideteksi sensor jarak HC-SR04): kembali ke Home dan
+    // biarkan idle → ad screen. Jangan mengganggu pembayaran/finish/admin.
+    if (event.type == 'USER_LEFT') {
+      if (_resolvingMedia) {
+        _pendingUserLeft = true;
+        _homeIdleTimer?.cancel();
+        return;
+      }
+      if (_currentRoute == VendingRoute.ad ||
+          _currentRoute == VendingRoute.tutorial ||
+          _currentRoute == VendingRoute.menu) {
+        _returnHome();
+      }
       return;
     }
 
@@ -317,6 +334,13 @@ class _VendingControllerState extends State<VendingController> {
     _resolvingMedia = false;
     if (!mounted || _currentRoute != VendingRoute.home) return;
 
+    // Orang pergi saat media sedang dimuat → mulai ulang hitung mundur idle.
+    if (_pendingUserLeft) {
+      _pendingUserLeft = false;
+      _scheduleHomeIdle();
+      return;
+    }
+
     if (_pendingUserDetection) {
       _pendingUserDetection = false;
       unawaited(_showTutorialOrHome());
@@ -342,6 +366,14 @@ class _VendingControllerState extends State<VendingController> {
     _resolvingMedia = false;
     _pendingUserDetection = false;
     if (!mounted) return;
+
+    // Orang pergi sementara media dimuat → batal membuka tutorial, kembali
+    // ke Home dan mulai ulang hitung mundur idle (ad screen menyusul).
+    if (_pendingUserLeft) {
+      _pendingUserLeft = false;
+      _returnHome();
+      return;
+    }
 
     final tutorial = (latestCatalog ?? _mediaCatalog).tutorial;
     if (tutorial != null) {

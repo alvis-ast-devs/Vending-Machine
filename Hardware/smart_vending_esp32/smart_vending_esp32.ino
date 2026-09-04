@@ -3,6 +3,7 @@
 // =============================================================================
 // 50 Output: 74HC595 × 7 → Relay × 50 → Motor pengdrop produk
 // Drop detect: IR receiver array (≈10 unit) → semua OUT diparalel ke 1 pin
+// Presence:   HC-SR04 ultrasonic × 2 → deteksi kehadiran orang di depan mesin
 // Serial:    Komunikasi dengan Flutter Frontend via UART 115200
 //
 // Mapping Slot → Bit:
@@ -17,15 +18,40 @@
 //   KEY_X / X     → input digit keypad (0-9)
 //   ACCEPT        → konfirmasi
 //   CANCEL        → batal
+//   SONIC_STATUS  → debug: cetak jarak kedua sensor HC-SR04
 //
 // Event Serial ke Frontend:
 //   READY, BUSY_XX, SUCCESS_XX, WARNING_NO_DROP_XX, ERROR_*
-//   EVENT_USER_DETECTED, EVENT_KEY_X, EVENT_ACCEPT, EVENT_CANCEL
+//   EVENT_USER_DETECTED, EVENT_USER_LEFT, EVENT_KEY_X, EVENT_ACCEPT,
+//   EVENT_CANCEL
 //   IR_STATUS (debug: baca level IR untuk kalibrasi IR_ACTIVE_LEVEL)
+//
+// Sensor Jarak (HC-SR04 ×2) — deteksi kehadiran orang:
+//   Jarak terdekat ≤ PRESENCE_DISTANCE_CM → EVENT_USER_DETECTED
+//   Jarak > PRESENCE_DISTANCE_CM          → EVENT_USER_LEFT
+//   (dengan SONIC_STABLE_READINGS pembacaan berurutan sebagai debounce)
 // =============================================================================
 
 #include "shift_output.h"
 #include "keypad.h"
+
+// ─── HC-SR04 Ultrasonic (Presence Detection) ────────────────────────────────
+// 2 sensor jarak untuk mendeteksi kehadiran orang di depan mesin vending.
+//   SONIC #1 (kiri) : TRIG GPIO 19, ECHO GPIO 21
+//   SONIC #2 (kanan): TRIG GPIO 22, ECHO GPIO 13
+#define SONIC1_TRIG 19
+#define SONIC1_ECHO 21
+#define SONIC2_TRIG 22
+#define SONIC2_ECHO 13
+
+// Jarak terdekat (cm) yang masih dianggap "ada orang di depan mesin".
+#define PRESENCE_DISTANCE_CM 150.0f
+// Dikembalikan saat ECHO timeout (tidak ada pantulan / di luar jangkauan).
+#define SONIC_OUT_OF_RANGE_CM 999.0f
+// Interval antar pembacaan sensor jarak (ms).
+const unsigned long SONIC_POLL_INTERVAL_MS = 200;
+// Berapa pembacaan berurutan sebelum state kehadiran berubah (anti noise).
+const uint8_t SONIC_STABLE_READINGS = 3;
 
 // ─── IR Receiver (Drop Detection) ────────────────────────────────────────────
 // Semua OUT dari IR receiver array (≈10 unit) diparalel ke satu jalur bersama.
@@ -63,6 +89,59 @@ bool irBeamBlocked() {
     delay(1);
   }
   return true;
+}
+
+// =============================================================================
+//  HC-SR04 ULTRASONIC — presence detection (2 sensor)
+// =============================================================================
+
+/// Ukur jarak (cm) satu HC-SR04.
+/// ECHO di-pulse HIGH selama waktu tempuh gelombang; durasi dikonversi ke cm.
+/// Timeout pulseIn 30 ms (≈ 500 cm) → dianggap tidak ada pantulan.
+float readDistanceCm(uint8_t trigPin, uint8_t echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  const unsigned long duration = pulseIn(echoPin, HIGH, 30000);
+  if (duration == 0) return SONIC_OUT_OF_RANGE_CM;
+  return (duration * 0.0343f) / 2.0f;  // cm
+}
+
+// ─── State kehadiran (dengan debounce berurutan) ────────────────────────────
+bool personPresent = false;
+uint8_t sonicPresentStreak = 0;
+uint8_t sonicAbsentStreak = 0;
+unsigned long lastSonicPoll = 0;
+float lastDistanceCm = SONIC_OUT_OF_RANGE_CM;
+
+/// Baca kedua sensor dan update state kehadiran.
+/// Jarak yang dipakai = yang TERDEKAT dari kedua sensor (salah satu mendeteksi
+/// orang di depan mesin sudah cukup).
+void pollPresenceSensor() {
+  const float d1 = readDistanceCm(SONIC1_TRIG, SONIC1_ECHO);
+  const float d2 = readDistanceCm(SONIC2_TRIG, SONIC2_ECHO);
+  lastDistanceCm = min(d1, d2);
+
+  if (lastDistanceCm <= PRESENCE_DISTANCE_CM) {
+    // Ada objek dekat → hitung streak "ada orang".
+    sonicAbsentStreak = 0;
+    if (sonicPresentStreak < SONIC_STABLE_READINGS) sonicPresentStreak++;
+    if (!personPresent && sonicPresentStreak >= SONIC_STABLE_READINGS) {
+      personPresent = true;
+      emitUserDetected();
+    }
+  } else {
+    // Tidak ada objek dekat → hitung streak "tidak ada orang".
+    sonicPresentStreak = 0;
+    if (sonicAbsentStreak < SONIC_STABLE_READINGS) sonicAbsentStreak++;
+    if (personPresent && sonicAbsentStreak >= SONIC_STABLE_READINGS) {
+      personPresent = false;
+      emitUserLeft();
+    }
+  }
 }
 
 // =============================================================================
@@ -111,6 +190,10 @@ void runMotorForSlot(const String &slotCode) {
 
 void emitUserDetected() {
   Serial.println(F("EVENT_USER_DETECTED"));
+}
+
+void emitUserLeft() {
+  Serial.println(F("EVENT_USER_LEFT"));
 }
 
 void emitKeypadDigit(const char digit) {
@@ -169,6 +252,22 @@ bool processTestInput(const String &command) {
   if (command == "IR_STATUS" || command == "STATUS") {
     Serial.print(F("IR_LEVEL="));
     Serial.println(digitalRead(IR_PIN) ? F("HIGH") : F("LOW"));
+    return true;
+  }
+
+  // DEBUG: cetak jarak kedua sensor HC-SR04 (untuk kalibrasi ambang jarak)
+  if (command == "SONIC_STATUS") {
+    const float d1 = readDistanceCm(SONIC1_TRIG, SONIC1_ECHO);
+    const float d2 = readDistanceCm(SONIC2_TRIG, SONIC2_ECHO);
+    lastDistanceCm = min(d1, d2);
+    Serial.print(F("SONIC1_CM="));
+    Serial.print(d1);
+    Serial.print(F(" SONIC2_CM="));
+    Serial.print(d2);
+    Serial.print(F(" NEAREST_CM="));
+    Serial.print(lastDistanceCm);
+    Serial.print(F(" PRESENT="));
+    Serial.println(personPresent ? F("YES") : F("NO"));
     return true;
   }
 
@@ -234,6 +333,12 @@ void setup() {
   // Inisialisasi pin IR receiver (drop detection, semua receiver diparalel).
   pinMode(IR_PIN, INPUT_PULLUP);
 
+  // Inisialisasi pin HC-SR04 ultrasonic (presence detection).
+  pinMode(SONIC1_TRIG, OUTPUT);
+  pinMode(SONIC1_ECHO, INPUT);
+  pinMode(SONIC2_TRIG, OUTPUT);
+  pinMode(SONIC2_ECHO, INPUT);
+
   commandBuffer.reserve(MAX_COMMAND_LENGTH);
 
   // Inisialisasi keypad matrix 4x4.
@@ -242,8 +347,9 @@ void setup() {
   Serial.println(F("READY"));
   Serial.println(F("SHIFT_OUT: 7×74HC595 → relay ×50 initialized"));
   Serial.println(F("IR_DROP: IR receiver array (≈10 unit, paralel) → 1 pin; motor stop saat beam terblokir"));
+  Serial.println(F("SONIC: 2×HC-SR04 ultrasonic; EVENT_USER_DETECTED saat jarak ≤ 150 cm, EVENT_USER_LEFT saat > 150 cm"));
   Serial.println(F("KEYPAD: 4x4 matrix ready (physical + serial input)"));
-  Serial.println(F("TEST_COMMANDS: DETECT, 0-9, ACCEPT, CANCEL, DECLINED, IR_STATUS, ALL_OFF"));
+  Serial.println(F("TEST_COMMANDS: DETECT, 0-9, ACCEPT, CANCEL, DECLINED, IR_STATUS, SONIC_STATUS, ALL_OFF"));
 }
 
 void loop() {
@@ -269,6 +375,13 @@ void loop() {
   }
 
   const unsigned long now = millis();
+
+  // ── 2. Polling sensor jarak HC-SR04 (presence detection) ──
+  if (now - lastSonicPoll >= SONIC_POLL_INTERVAL_MS) {
+    lastSonicPoll = now;
+    pollPresenceSensor();
+  }
+
   // ── 3. Polling keypad matrix ──
   if (now - lastKeypadPoll >= KEYPAD_POLL_INTERVAL_MS) {
     lastKeypadPoll = now;

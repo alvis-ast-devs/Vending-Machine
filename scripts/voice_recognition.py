@@ -211,7 +211,7 @@ def listen_loop() -> None:
 
         while True:
             try:
-                audio = recognizer.listen(source, timeout=1, phrase_time_limit=None)
+                audio = recognizer.listen(source, timeout=60, phrase_time_limit=None)
             except speech.WaitTimeoutError:
                 continue
 

@@ -179,6 +179,10 @@ class SerialBridge {
       eventBus.publish(
         const MachineEvent(type: 'USER_DETECTED', data: {}),
       );
+    } else if (normalized == 'EVENT_USER_LEFT') {
+      eventBus.publish(
+        const MachineEvent(type: 'USER_LEFT', data: {}),
+      );
     } else if (normalized == 'EVENT_ACCEPT') {
       eventBus.publish(
         const MachineEvent(type: 'KEYPAD_ACCEPT', data: {}),

@@ -19,6 +19,36 @@ alur kamera:
 flutter run -d windows --dart-define=HARDWARE_ENABLED=true
 ```
 
+### Tes iklan/media tanpa build release
+
+Aplikasi membaca media dari folder `assets/` di sebelah executable (folder
+debug ada di dalam `build/`). Untuk mengetes upload iklan/tutorial sebelum
+build release, arahkan data ke folder repo dengan `ASSETS_BASE_PATH`:
+
+```bat
+:: jalankan dari folder Frontend\vending_ui
+flutter run -d windows "--dart-define=ASSETS_BASE_PATH=%CD%"
+```
+
+Tanda kutip penting: jika path repo mengandung spasi, tanpa tanda kutip
+flutter akan menganggap sebagian path sebagai file target dan gagal.
+
+Lalu taruh file media di sini (folder dibuat otomatis saat pertama kali
+menjalankan aplikasi):
+
+```
+Frontend/vending_ui/assets/
+├── ads/            ← iklan: foto/video, bisa banyak, diputar bergantian
+├── tutorial/       ← satu video tutorial (file video pertama yang ditemukan)
+├── homescreen/     ← satu foto/video homescreen
+└── product_images/ ← foto produk: {slot_code}.{ext}, misal 01.png
+```
+
+Media dibaca ulang saat idle 30 detik di Home (→ layar iklan) atau saat
+`USER_DETECTED` (tombol `F`) — jadi setelah menambah file, tekan `F` atau
+tunggu idle untuk melihat hasilnya tanpa restart. `run_dev.bat` sudah memakai
+mode ini secara otomatis.
+
 Untuk alamat backend lain:
 
 ```powershell
@@ -33,6 +63,10 @@ flutter run -d windows `
   foto/video iklan tersedia.
 - `USER_DETECTED` memutar satu video tutorial jika tersedia, kemudian membuka
   Home. Jika tutorial kosong, Home langsung digunakan.
+- `USER_LEFT` (dikirim ESP32 saat sensor jarak HC-SR04 tidak lagi mendeteksi
+  orang) mengembalikan aplikasi ke Home dari ad/tutorial/menu dan memulai ulang
+  hitung mundur idle. Transaksi pembayaran, halaman Finish, dan Admin Mode
+  tidak diganggu.
 - `MenuScreen` mengambil produk dari `GET /api/products`.
 - `MenuScreen` menampilkan foto produk dari backend atau ikon default jika foto
   belum tersedia/gagal dimuat.
@@ -64,3 +98,6 @@ flutter analyze
 flutter test
 flutter build windows
 ```
+
+Saat build release, jalankan tanpa `ASSETS_BASE_PATH` supaya media dibaca dari
+folder `assets/` di sebelah `vending_ui.exe`.

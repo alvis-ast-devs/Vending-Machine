@@ -77,6 +77,35 @@ flutter run -d windows
 flutter run -d windows --dart-define=HARDWARE_ENABLED=true --dart-define=SERIAL_PORT=COM3
 ```
 
+### Tes media tanpa build release
+
+Aplikasi membaca media dari folder `assets/` di sebelah executable. Saat
+menjalankan dari source, executable debug ada di dalam `build/` — supaya media
+bisa dites tanpa build release, arahkan data ke folder repo dengan
+`ASSETS_BASE_PATH` (folder ini berisi `assets/` dan `products.json`):
+
+```bat
+cd /d Frontend\vending_ui
+flutter run -d windows "--dart-define=ASSETS_BASE_PATH=%CD%"
+```
+
+Tanda kutip penting: jika path repo mengandung spasi, tanpa tanda kutip
+flutter akan menganggap sebagian path sebagai file target dan gagal.
+
+Kemudian letakkan file media di folder repo ini:
+
+```
+Frontend/vending_ui/assets/
+├── ads/            ← iklan (foto/video, diputar bergantian)
+├── tutorial/       ← satu video tutorial
+├── homescreen/     ← satu foto/video homescreen
+└── product_images/ ← foto produk bernama {slot_code}.png (01.png, dst.)
+```
+
+Media dibaca ulang setiap kali aplikasi menampilkan iklan (idle 30 detik di
+Home) atau saat pengguna terdeteksi — tambah/hapus file lalu tekan `F` untuk
+tes cepat. `run_dev.bat` sudah memakai mode ini.
+
 ### 4. Build
 
 ```bash
@@ -117,10 +146,15 @@ atau ubah `AppConfig.adminCode` di `lib/core/app_config.dart`. Jangan gunakan ko
 - **Iklan:** Letakkan file di `assets/ads/` (foto atau video, diputar bergantian)
 - **Tutorial:** Letakkan satu file video di `assets/tutorial/` (ganti = rename file baru)
 - **Homescreen:** Letakkan satu file di `assets/homescreen/` (foto atau video)
+- **QR pembayaran:** `assets/qris.png` (dipakai halaman pembayaran)
 
 Format yang didukung:
 - Gambar: PNG, JPG, WebP, GIF, BMP
 - Video: MP4, WebM, MOV, MKV
+
+Saat development, taruh media di `Frontend/vending_ui/assets/` dan jalankan
+dengan `ASSETS_BASE_PATH` (lihat di atas); saat build release, media dibaca
+dari folder `assets/` di sebelah `vending_machine.exe`.
 
 ## ESP32
 

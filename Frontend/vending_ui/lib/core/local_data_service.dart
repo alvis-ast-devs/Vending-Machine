@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:vending_ui/core/app_config.dart';
 import 'package:vending_ui/core/product_model.dart';
 
 /// Manages all local data: products JSON file and media folder scanning.
@@ -32,6 +33,18 @@ class LocalDataService {
 
     if (customBasePath != null) {
       _appDir = Directory(customBasePath);
+    } else if (AppConfig.assetsBasePath.isNotEmpty) {
+      // Dev mode: media dibaca dari folder stabil di repo, tanpa build
+      // release. Folder ini harus berisi assets/ dan products.json.
+      // Nilai dibersihkan defensif: kutipan bocor atau separator di akhir
+      // (mis. dari %~dp0 lewat cmd) tidak boleh menggagalkan startup.
+      var devPath = AppConfig.assetsBasePath.trim().replaceAll('"', '');
+      while (devPath.endsWith('/') || devPath.endsWith('\\')) {
+        devPath = devPath.substring(0, devPath.length - 1);
+      }
+      _appDir = devPath.isEmpty
+          ? File(Platform.resolvedExecutable).parent
+          : Directory(devPath);
     } else {
       // Use the directory next to the executable for portable deployment.
     _appDir = File(Platform.resolvedExecutable).parent;
