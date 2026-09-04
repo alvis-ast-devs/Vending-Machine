@@ -168,26 +168,34 @@ class _AdminScreenState extends State<AdminScreen> {
     final productsBySlot = {
       for (final product in products) product.slotCode: product,
     };
-    final allSlots = physicalSlotRows.expand((row) => row).toList();
 
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-        childAspectRatio: 0.88,
+    // Layout sama dengan halaman menu user: 6 baris Expanded sehingga
+    // semua slot muat di layar tanpa scroll — admin langsung melihat
+    // seluruh stok sekaligus.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      child: Column(
+        children: List.generate(physicalSlotRows.length, (rowIndex) {
+          final slotCodes = physicalSlotRows[rowIndex];
+          return Expanded(
+            child: Row(
+              children: slotCodes.map((slotCode) {
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(1.5),
+                    child: _StockTile(
+                      key: ValueKey('admin-slot-$slotCode'),
+                      slotCode: slotCode,
+                      product: productsBySlot[slotCode],
+                      fullStock: AppConfig.defaultFullStock,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          );
+        }),
       ),
-      itemCount: allSlots.length,
-      itemBuilder: (context, index) {
-        final slotCode = allSlots[index];
-        return _StockTile(
-          key: ValueKey('admin-slot-$slotCode'),
-          slotCode: slotCode,
-          product: productsBySlot[slotCode],
-          fullStock: AppConfig.defaultFullStock,
-        );
-      },
     );
   }
 }

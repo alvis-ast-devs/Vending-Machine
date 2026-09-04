@@ -42,39 +42,71 @@ class VoiceRecognitionBridge {
   final StreamController<VoiceRecognitionResult> _resultController =
       StreamController<VoiceRecognitionResult>.broadcast();
 
+  File? _logFile;
+
   /// Stream of results from the voice recognition script.
   Stream<VoiceRecognitionResult> get results => _resultController.stream;
+
+  /// Log ke konsol (debug) DAN ke `voice_log.txt` di samping exe.
+  /// Versi release tidak punya konsol, jadi file log ini satu-satunya
+  /// cara melihat error voice recognition saat aplikasi sudah di-build.
+  void _log(String message) {
+    debugPrint(message);
+    try {
+      _logFile ??= File(
+        '${File(Platform.resolvedExecutable).parent.path}'
+        '${Platform.pathSeparator}voice_log.txt',
+      );
+      _logFile!.writeAsStringSync(
+        '${DateTime.now().toIso8601String()} $message\r\n',
+        mode: FileMode.append,
+      );
+    } catch (_) {
+      // Logging tidak boleh merusak aplikasi.
+    }
+  }
 
   bool get isListening => _listening;
 
   /// Start the Python voice recognition script.
   ///
-  /// [pythonPath] is the path to the Python executable.
-  /// [scriptPath] is the path to `voice_recognition.py`.
+  /// [pythonPath] is the path to the Python executable. When omitted, the
+  /// bridge prefers the bundled embeddable Python at
+  /// `<exe>/runtime/python/python.exe` and falls back to `python` on PATH.
+  /// [scriptPath] is the path to `voice_recognition.py`; when omitted it is
+  /// resolved to `<exe>/scripts/voice_recognition.py`.
   Future<void> startListening({
-    String pythonPath = 'python',
+    String? pythonPath,
     String? scriptPath,
   }) async {
     if (_listening) return;
 
-    final resolvedScript = scriptPath ?? _defaultScriptPath();
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final sep = Platform.pathSeparator;
+    final resolvedScript = scriptPath ??
+        '$exeDir${sep}scripts${sep}voice_recognition.py';
+
+    final bundledPython = File(
+      '$exeDir${sep}runtime${sep}python${sep}python.exe',
+    );
+    final resolvedPython = pythonPath ??
+        (bundledPython.existsSync() ? bundledPython.path : 'python');
+
     final scriptFile = File(resolvedScript);
     if (!scriptFile.existsSync()) {
-      debugPrint(
-        '[VoiceBridge] Script tidak ditemukan: $resolvedScript',
-      );
+      _log('[VoiceBridge] Script tidak ditemukan: $resolvedScript');
       return;
     }
 
     try {
       _process = await Process.start(
-        pythonPath,
+        resolvedPython,
         [resolvedScript],
         mode: ProcessStartMode.normal,
       );
 
       _listening = true;
-      debugPrint('[VoiceBridge] ✅ Voice recognition MULAI');
+      _log('[VoiceBridge] ✅ Voice recognition MULAI');
 
       // Listen to stdout for JSON results.
       _process!.stdout
@@ -83,20 +115,21 @@ class VoiceRecognitionBridge {
           .listen(
         (line) {
           if (line.trim().isEmpty) return;
-          debugPrint('[VoiceBridge] 🎤 Sedang mendengarkan... (data diterima)');
+          _log('[VoiceBridge] 🎤 Data diterima dari script: $line');
           try {
             final json = jsonDecode(line.trim()) as Map<String, dynamic>;
             final result = VoiceRecognitionResult.fromJson(json);
-            debugPrint('[VoiceBridge] 📝 Transcript: ${result.transcript}, Amount: ${result.amount}');
+            _log('[VoiceBridge] 📝 Transcript: ${result.transcript}, Amount: ${result.amount}'
+                '${result.error != null ? ', Error: ${result.error}' : ''}');
             if (!_disposed) {
               _resultController.add(result);
             }
           } catch (e) {
-            debugPrint('[VoiceBridge] Parse error: $line');
+            _log('[VoiceBridge] Parse error: $line');
           }
         },
         onError: (error) {
-          debugPrint('[VoiceBridge] stdout error: $error');
+          _log('[VoiceBridge] stdout error: $error');
           _listening = false;
         },
         onDone: () {
@@ -109,16 +142,16 @@ class VoiceRecognitionBridge {
           .transform(utf8.decoder)
           .transform(const LineSplitter())
           .listen((line) {
-        debugPrint('[VoiceBridge stderr] $line');
+        _log('[VoiceBridge stderr] $line');
       });
 
       // Watch for process exit.
       _process!.exitCode.then((code) {
         _listening = false;
-        debugPrint('[VoiceBridge] Process exited with code $code');
+        _log('[VoiceBridge] Process exited with code $code');
       });
     } catch (e) {
-      debugPrint('[VoiceBridge] Failed to start: $e');
+      _log('[VoiceBridge] Failed to start: $e');
       _listening = false;
     }
   }
@@ -132,29 +165,23 @@ class VoiceRecognitionBridge {
   /// Stop the voice recognition by sending STOP to stdin.
   void stopListening() {
     if (!_listening || _process == null) return;
-    debugPrint('[VoiceBridge] 🛑 Menghentikan voice recognition...');
+    _log('[VoiceBridge] 🛑 Menghentikan voice recognition...');
     try {
       _process!.stdin.writeln('STOP');
     } catch (_) {
       // Process may have already exited.
     }
     _listening = false;
-    debugPrint('[VoiceBridge] ⏹️ Voice recognition BERHENTI');
+    _log('[VoiceBridge] ⏹️ Voice recognition BERHENTI');
   }
 
   void dispose() {
-    debugPrint('[VoiceBridge] 🗑️ Disposing voice recognition bridge...');
+    _log('[VoiceBridge] 🗑️ Disposing voice recognition bridge...');
     _disposed = true;
     stopListening();
     _process?.kill(ProcessSignal.sigterm);
     _process = null;
     _resultController.close();
-    debugPrint('[VoiceBridge] ⏹️ Voice recognition BERHENTI (disposed)');
-  }
-
-  String _defaultScriptPath() {
-    // Look for the script relative to the executable directory.
-    final exeDir = File(Platform.resolvedExecutable).parent.path;
-    return '$exeDir${Platform.pathSeparator}scripts${Platform.pathSeparator}voice_recognition.py';
+    _log('[VoiceBridge] ⏹️ Voice recognition BERHENTI (disposed)');
   }
 }

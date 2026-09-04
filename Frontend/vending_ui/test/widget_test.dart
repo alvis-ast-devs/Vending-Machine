@@ -371,10 +371,29 @@ void main() {
     expect(find.text('ADMIN — ISI STOK'), findsOneWidget);
     expect(find.byKey(const ValueKey('admin-slot-01')), findsOneWidget);
     expect(find.byKey(const ValueKey('admin-slot-05')), findsOneWidget);
+    // Semua slot tampil sekaligus tanpa scroll (layout seperti menu user).
+    expect(find.byKey(const ValueKey('admin-slot-51')), findsOneWidget);
+    expect(find.byKey(const ValueKey('admin-slot-55')), findsOneWidget);
+    expect(tester.takeException(), isNull);
     expect(
       find.text('ACCEPT: isi stok penuh  ·  CANCEL: kembali'),
       findsOneWidget,
     );
+
+    await unmountApp(tester);
+  });
+
+  testWidgets('admin tidak overflow pada viewport landscape', (tester) async {
+    TestWidgetsFlutterBinding.instance.platformDispatcher.views.first
+      ..physicalSize = const Size(800, 600)
+      ..devicePixelRatio = 1;
+    final source = await pumpVending(tester);
+    await goToMenu(tester);
+    await enterAdmin(tester, source);
+
+    expect(find.text('ADMIN — ISI STOK'), findsOneWidget);
+    expect(find.byKey(const ValueKey('admin-slot-55')), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
     await unmountApp(tester);
   });
