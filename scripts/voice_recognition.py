@@ -35,7 +35,7 @@ from pathlib import Path
 # Name of the offline model folder (Systran/faster-whisper-<size>).
 # Switch to "whisper-tiny" for a smaller/faster model, or "whisper-small"
 # for better accuracy (download the matching folder into models\).
-MODEL_NAME = "whisper-base"
+MODEL_NAME = "whisper-small"
 
 # ─── Currency parsing (ported from Backend/app/voice_payment.py) ─────────────
 
